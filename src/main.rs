@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
-use sms3_backend::{
+use sms4_backend::{
     account::{department::Department, Account},
     config::Config,
     Error,
@@ -18,7 +18,7 @@ pub struct Global<Io: IoHandle> {
 }
 
 type AccountWorld<Io> = World<Account, 1, Io>;
-type UnverifiedAccountWorld<Io> = World<sms3_backend::account::Unverified, 1, Io>;
+type UnverifiedAccountWorld<Io> = World<sms4_backend::account::Unverified, 1, Io>;
 type DepartmentWorld<Io> = World<Department, 1, Io>;
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ mod handle {
             let a = lazy.get().await?;
             if a.is_token_valid(&$a.token) {
                 let _tags = a.tags();
-                if !($(_tags.contains_permission(&sms3_backend::account::Tag::Permission($p)) &&)* true) {
+                if !($(_tags.contains_permission(&sms4_backend::account::Tag::Permission($p)) &&)* true) {
                     return Err($crate::Error::PermissionDenied);
                 }
             } else {
