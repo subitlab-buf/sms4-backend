@@ -192,7 +192,7 @@ pub async fn self_info<Io: IoHandle>(
             .tags()
             .from_entry(&TagEntry::Permission)
             .map_or(vec![], |set| {
-                set.into_iter()
+                set.iter()
                     .filter_map(|t| t.as_permission())
                     .copied()
                     .collect()
@@ -201,7 +201,7 @@ pub async fn self_info<Io: IoHandle>(
             .tags()
             .from_entry(&TagEntry::Department)
             .map_or(vec![], |set| {
-                set.into_iter()
+                set.iter()
                     .filter_map(|t| {
                         if let Tag::Department(d) = t {
                             Some(d.clone())
@@ -268,10 +268,9 @@ pub async fn modify<Io: IoHandle>(
         }
     }
     if let Some(mut departments) = req.departments.take() {
-        account
-            .tags_mut()
-            .from_entry_mut(&TagEntry::Department)
-            .map(|t| t.clear());
+        if let Some(t) = account.tags_mut().from_entry_mut(&TagEntry::Department) {
+            t.clear()
+        }
         departments.iter_mut().for_each(Department::initialize_id);
         let mut di = departments.iter();
         if let Some(first) = di.next() {
@@ -354,3 +353,6 @@ pub async fn set_permissions<Io: IoHandle>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {}
