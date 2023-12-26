@@ -1,11 +1,15 @@
-use std::{collections::HashSet, num::NonZeroU64};
+use std::{collections::HashSet, f32::consts::E, num::NonZeroU64};
 
 use axum::{extract::State, Json};
 use dmds::{IoHandle, StreamExt};
 use libaccount::{tag::AsPermission, Phone, VerifyDescriptor};
 use serde::{Deserialize, Serialize};
 use sms4_backend::{
-    account::{department::Department, verify::Captcha, Permission, Tag, TagEntry, Unverified},
+    account::{
+        department::Department,
+        verify::{self, Captcha, DescArgs},
+        Permission, Tag, TagEntry, Unverified,
+    },
     Error,
 };
 
@@ -21,6 +25,7 @@ pub async fn send_captcha<Io: IoHandle>(
         smtp_transport,
         worlds,
         config,
+        test_cx,
     }): State<Global<Io>>,
     Json(SendCaptchaReq { email }): Json<SendCaptchaReq>,
 ) -> Result<(), Error> {
@@ -39,7 +44,8 @@ pub async fn send_captcha<Io: IoHandle>(
         if lazy.id() == unverified.email_hash() {
             if let Ok(val) = lazy.get_mut().await {
                 if val.email() == unverified.email() {
-                    val.send_captcha(&config.smtp, &smtp_transport).await?;
+                    val.send_captcha(&config.smtp, &smtp_transport, &test_cx)
+                        .await?;
                     return Ok(());
                 }
             }
@@ -47,38 +53,41 @@ pub async fn send_captcha<Io: IoHandle>(
     }
 
     unverified
-        .send_captcha(&config.smtp, &smtp_transport)
+        .send_captcha(&config.smtp, &smtp_transport, &test_cx)
         .await?;
     worlds.unverified_account.insert(unverified).await?;
     Ok(())
 }
 
 #[derive(Deserialize)]
-pub struct RegisterReq(pub VerifyDescriptor<Tag, Captcha>);
+pub struct RegisterReq(pub VerifyDescriptor<Tag, verify::DescArgs>);
 
 pub async fn register<Io: IoHandle>(
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(RegisterReq(desc)): Json<RegisterReq>,
 ) -> Result<(), Error> {
     let unverified = Unverified::new(desc.email.to_owned())?;
-    worlds
-        .account
-        .try_insert(
-            libaccount::Unverified::from(
-                worlds
-                    .unverified_account
-                    .chunk_buf_of_data_or_load(&unverified)
-                    .await
-                    .map_err(|_| Error::UnverifiedAccountNotFound)?
-                    .remove(unverified.email_hash())
-                    .await
-                    .ok_or(Error::UnverifiedAccountNotFound)?,
-            )
-            .verify(desc)?
-            .into(),
-        )
-        .await
-        .map_err(|_| Error::PermissionDenied)
+    let unverified = libaccount::Unverified::from(
+        worlds
+            .unverified_account
+            .chunk_buf_of_data_or_load(&unverified)
+            .await
+            .map_err(|_| Error::UnverifiedAccountNotFound)?
+            .remove(unverified.email_hash())
+            .await
+            .ok_or(Error::UnverifiedAccountNotFound)?,
+    );
+    match unverified.verify(desc) {
+        Ok(verified) => worlds
+            .account
+            .try_insert(verified.into())
+            .await
+            .map_err(|_| Error::PermissionDenied),
+        Err((err, unverified)) => {
+            worlds.unverified_account.insert(unverified.into()).await?;
+            Err(err)
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -127,6 +136,7 @@ pub async fn send_reset_password_captcha<Io: IoHandle>(
         smtp_transport,
         worlds,
         config,
+        test_cx,
     }): State<Global<Io>>,
     Json(SendResetPasswordCaptchaReq { email }): Json<SendResetPasswordCaptchaReq>,
 ) -> Result<(), Error> {
@@ -135,7 +145,7 @@ pub async fn send_reset_password_captcha<Io: IoHandle>(
     let mut lazy = ga!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
     lazy.get_mut()
         .await?
-        .req_reset_password(&config.smtp, &smtp_transport)
+        .req_reset_password(&config.smtp, &smtp_transport, &test_cx)
         .await
         .map_err(From::from)
 }

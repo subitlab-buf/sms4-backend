@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use crate::{config, Error};
+use crate::{config, Error, TestCx};
 
 use super::Ext;
 
@@ -71,12 +71,14 @@ impl VerifyCx {
     ///
     /// - Errors if the difference between the last request time
     /// and the current time is no more than 10 minutes.
+    #[allow(unreachable_code, unused_variables)]
     pub(super) async fn send_email<E>(
         &mut self,
         smtp_config: &config::SMTP,
         to: lettre::Address,
         event: impl Display,
         transport: &AsyncSmtpTransport<E>,
+        test_cx: &TestCx,
     ) -> Result<(), Error>
     where
         E: lettre::Executor,
@@ -84,6 +86,11 @@ impl VerifyCx {
     {
         const SENDER: &str = "SubIT";
         let captcha = self.update()?;
+
+        if crate::IS_TEST.load(std::sync::atomic::Ordering::Acquire) {
+            *test_cx.captcha.lock().await = Some(captcha);
+            return Ok(());
+        }
 
         let msg = lettre::message::Message::builder()
             .sender(lettre::message::Mailbox {
@@ -131,6 +138,11 @@ impl Captcha {
         let mut rng = rand::thread_rng();
         Self(rng.gen_range(0..1000000))
     }
+
+    #[inline]
+    pub fn into_inner(self) -> u32 {
+        self.0
+    }
 }
 
 impl Default for Captcha {
@@ -150,16 +162,35 @@ impl Display for Captcha {
     }
 }
 
+impl From<u32> for Captcha {
+    #[inline]
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Captcha> for u32 {
+    #[inline]
+    fn from(value: Captcha) -> Self {
+        value.0
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DescArgs {
+    captcha: Captcha,
+}
+
 impl libaccount::ExtVerify<super::Tag, Ext> for VerifyCx {
-    type Args = Captcha;
+    type Args = DescArgs;
     type Error = Error;
 
-    fn into_verified_ext(
-        self,
+    fn to_verified_ext(
+        &self,
         args: &mut libaccount::VerifyDescriptor<super::Tag, Self::Args>,
     ) -> Result<Ext, Self::Error> {
         // Validate the captcha.
-        if self.captcha != args.ext_args {
+        if self.captcha != args.ext_args.captcha {
             return Err(Error::CaptchaIncorrect);
         }
 

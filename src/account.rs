@@ -6,7 +6,7 @@ use std::{
 use lettre::{transport::smtp, AsyncSmtpTransport};
 use serde::{Deserialize, Serialize};
 
-use crate::{config, Error};
+use crate::{config, Error, TestCx};
 
 use self::{
     department::Department,
@@ -145,12 +145,13 @@ impl Account {
         &mut self,
         config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
+        cx: &TestCx,
     ) -> Result<(), Error>
     where
         E: lettre::Executor,
         AsyncSmtpTransport<E>: lettre::AsyncTransport<Error = smtp::Error>,
     {
-        self.req_verify(VerifyVariant::ResetPassword, config, transport)
+        self.req_verify(VerifyVariant::ResetPassword, config, transport, cx)
             .await
     }
 
@@ -181,6 +182,7 @@ impl Account {
         variant: VerifyVariant,
         config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
+        cx: &TestCx,
     ) -> Result<(), Error>
     where
         E: lettre::Executor,
@@ -196,7 +198,7 @@ impl Account {
         ext.verifies
             .get_mut(&variant)
             .unwrap()
-            .send_email(config, to, variant, transport)
+            .send_email(config, to, variant, transport, cx)
             .await
     }
 
@@ -310,6 +312,7 @@ impl Unverified {
         &mut self,
         config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
+        cx: &TestCx,
     ) -> Result<(), Error>
     where
         E: lettre::Executor,
@@ -318,7 +321,7 @@ impl Unverified {
         let to = self.inner.email().parse()?;
         self.inner
             .ext_mut()
-            .send_email(config, to, "account activation", transport)
+            .send_email(config, to, "account activation", transport, cx)
             .await
     }
 }
@@ -375,5 +378,12 @@ impl From<Unverified> for libaccount::Unverified<VerifyCx> {
     #[inline]
     fn from(val: Unverified) -> Self {
         val.inner
+    }
+}
+
+impl From<libaccount::Unverified<VerifyCx>> for Unverified {
+    #[inline]
+    fn from(value: libaccount::Unverified<VerifyCx>) -> Self {
+        Self { inner: value }
     }
 }

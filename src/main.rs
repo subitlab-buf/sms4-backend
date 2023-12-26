@@ -10,11 +10,36 @@ use sms4_backend::{
 
 fn main() {}
 
-#[derive(Debug, Clone)]
+mod routes {
+    pub const SEND_CAPTCHA: &str = "/account/send-captcha";
+    pub const REGISTER: &str = "/account/register";
+    pub const LOGIN: &str = "/account/send-reset-password-captcha";
+    pub const RESET_PASSWORD: &str = "/account/reset-password";
+    pub const SELF_ACCOUNT_INFO: &str = "/account/self-info";
+    pub const MODIFY_ACCOUNT: &str = "/account/modify";
+    pub const LOGOUT: &str = "/account/logout";
+    pub const SET_PERMISSIONS: &str = "/account/set-permissions";
+}
+
+#[derive(Debug)]
 pub struct Global<Io: IoHandle> {
     pub smtp_transport: Arc<AsyncSmtpTransport<lettre::Tokio1Executor>>,
     pub worlds: Arc<Worlds<Io>>,
     pub config: Arc<Config>,
+
+    pub test_cx: Arc<sms4_backend::TestCx>,
+}
+
+impl<Io: IoHandle> Clone for Global<Io> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            smtp_transport: self.smtp_transport.clone(),
+            worlds: self.worlds.clone(),
+            config: self.config.clone(),
+            test_cx: self.test_cx.clone(),
+        }
+    }
 }
 
 type AccountWorld<Io> = World<Account, 1, Io>;
@@ -80,6 +105,20 @@ pub struct Auth {
     token: String,
 }
 
+impl Auth {
+    const KEY: &str = "Authorization";
+
+    #[cfg(test)]
+    pub fn append_to_req_builder(&self, builder: &mut Option<axum::http::request::Builder>) {
+        *builder = Some(
+            builder
+                .take()
+                .expect("request builder should not be None")
+                .header(Self::KEY, format!("{}:{}", self.account, self.token)),
+        );
+    }
+}
+
 #[async_trait::async_trait]
 impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
     type Rejection = Error;
@@ -88,8 +127,7 @@ impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
         parts: &mut axum::http::request::Parts,
         _state: &Global<Io>,
     ) -> Result<Self, Self::Rejection> {
-        const KEY: &str = "Authorization";
-        let raw = parts.headers.remove(KEY).ok_or(Error::NotLoggedIn)?;
+        let raw = parts.headers.remove(Self::KEY).ok_or(Error::NotLoggedIn)?;
         let (account, token) = raw
             .to_str()?
             .split_once(':')
@@ -102,43 +140,4 @@ impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use axum::Router;
-    use dmds::{mem_io_handle::MemStorage, world, World};
-    use sms4_backend::config::Config;
-
-    use crate::Global;
-
-    fn router() -> (Global<MemStorage>, Router) {
-        use axum::routing::{get, post};
-        use lettre::{transport::smtp::authentication::Mechanism, AsyncSmtpTransport};
-        let config = Config {
-            smtp: sms4_backend::config::SMTP {
-                server: "smtp-mail.outlook.com".to_owned(),
-                port: None,
-                address: "someone@pkuschool.edu.cn".parse().unwrap(),
-                username: "".to_owned(),
-                password: "".to_owned(),
-                auth: vec![Mechanism::Plain, Mechanism::Login],
-                encrypt: sms4_backend::config::SmtpEncryption::StartTls,
-            },
-            db_path: Default::default(),
-            port: 8080,
-        };
-        let state = Global {
-            smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
-            worlds: Arc::new(crate::Worlds {
-                account: world!(MemStorage::new(), 1152921504606846976 | ..=u64::MAX),
-                unverified_account: world!(MemStorage::new(), 4611686018427387904 | ..=u64::MAX),
-                department: world!(MemStorage::new(), 4611686018427387904 | ..u64::MAX),
-            }),
-            config: Arc::new(config),
-        };
-
-        (state, todo!())
-    }
-
-    mod account;
-}
+mod tests;

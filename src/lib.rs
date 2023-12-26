@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use account::verify::VerifyVariant;
 use axum::{http::StatusCode, response::IntoResponse};
 use lettre::transport::smtp;
@@ -9,6 +11,13 @@ pub mod account;
 pub mod post;
 
 pub mod resource;
+
+pub static IS_TEST: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Default)]
+pub struct TestCx {
+    pub captcha: tokio::sync::Mutex<Option<account::verify::Captcha>>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
