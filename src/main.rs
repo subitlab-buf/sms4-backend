@@ -100,3 +100,45 @@ impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::Router;
+    use dmds::{mem_io_handle::MemStorage, world, World};
+    use sms4_backend::config::Config;
+
+    use crate::Global;
+
+    fn router() -> (Global<MemStorage>, Router) {
+        use axum::routing::{get, post};
+        use lettre::{transport::smtp::authentication::Mechanism, AsyncSmtpTransport};
+        let config = Config {
+            smtp: sms4_backend::config::SMTP {
+                server: "smtp-mail.outlook.com".to_owned(),
+                port: None,
+                address: "someone@pkuschool.edu.cn".parse().unwrap(),
+                username: "".to_owned(),
+                password: "".to_owned(),
+                auth: vec![Mechanism::Plain, Mechanism::Login],
+                encrypt: sms4_backend::config::SmtpEncryption::StartTls,
+            },
+            db_path: Default::default(),
+            port: 8080,
+        };
+        let state = Global {
+            smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
+            worlds: Arc::new(crate::Worlds {
+                account: world!(MemStorage::new(), 1152921504606846976 | ..=u64::MAX),
+                unverified_account: world!(MemStorage::new(), 4611686018427387904 | ..=u64::MAX),
+                department: world!(MemStorage::new(), 4611686018427387904 | ..u64::MAX),
+            }),
+            config: Arc::new(config),
+        };
+
+        (state, todo!())
+    }
+
+    mod account;
+}

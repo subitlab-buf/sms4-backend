@@ -353,6 +353,3 @@ pub async fn set_permissions<Io: IoHandle>(
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {}

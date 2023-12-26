@@ -73,7 +73,7 @@ impl VerifyCx {
     /// and the current time is no more than 10 minutes.
     pub(super) async fn send_email<E>(
         &mut self,
-        smtp_config: &config::Smtp,
+        smtp_config: &config::SMTP,
         to: lettre::Address,
         event: impl Display,
         transport: &AsyncSmtpTransport<E>,

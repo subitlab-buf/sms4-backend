@@ -143,7 +143,7 @@ impl Account {
     #[inline]
     pub async fn req_reset_password<E>(
         &mut self,
-        config: &config::Smtp,
+        config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
     ) -> Result<(), Error>
     where
@@ -179,7 +179,7 @@ impl Account {
     async fn req_verify<E>(
         &mut self,
         variant: VerifyVariant,
-        config: &config::Smtp,
+        config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
     ) -> Result<(), Error>
     where
@@ -308,7 +308,7 @@ impl Unverified {
     /// - Errors if the email send failed.
     pub async fn send_captcha<E>(
         &mut self,
-        config: &config::Smtp,
+        config: &config::SMTP,
         transport: &AsyncSmtpTransport<E>,
     ) -> Result<(), Error>
     where
