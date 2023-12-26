@@ -99,6 +99,11 @@ pub struct Auth {
 }
 
 impl Auth {
+    #[inline]
+    pub fn new(account: u64, token: String) -> Self {
+        Self { account, token }
+    }
+
     const KEY: &str = "Authorization";
 
     #[cfg(test)]

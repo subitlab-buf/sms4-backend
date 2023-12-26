@@ -20,6 +20,8 @@ async fn creation() {
         .await
         .expect("captcha not sent");
 
+    // Verify the account.
+
     // Simulates a wrong captcha.
     let wrong_captcha = sms4_backend::account::verify::Captcha::from(captcha.into_inner() + 1);
     let res = req!(route => REGISTER,
@@ -87,4 +89,9 @@ async fn creation() {
                 .into()
         )
     )
+}
+
+#[tokio::test]
+async fn login() {
+    let (state, route) = router();
 }
