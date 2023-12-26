@@ -31,7 +31,6 @@ fn router() -> (Global<MemStorage>, Router) {
         worlds: Arc::new(crate::Worlds {
             account: world!(MemStorage::new(), 1152921504606846976 | ..=u64::MAX),
             unverified_account: world!(MemStorage::new(), 4611686018427387904 | ..=u64::MAX),
-            department: world!(MemStorage::new(), 4611686018427387904 | ..=u64::MAX),
         }),
         config: Arc::new(config),
         test_cx: Default::default(),

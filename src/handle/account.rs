@@ -1,4 +1,4 @@
-use std::{collections::HashSet, f32::consts::E, num::NonZeroU64};
+use std::{collections::HashSet, num::NonZeroU64};
 
 use axum::{extract::State, Json};
 use dmds::{IoHandle, StreamExt};
@@ -6,8 +6,7 @@ use libaccount::{tag::AsPermission, Phone, VerifyDescriptor};
 use serde::{Deserialize, Serialize};
 use sms4_backend::{
     account::{
-        department::Department,
-        verify::{self, Captcha, DescArgs},
+        verify::{self, Captcha},
         Permission, Tag, TagEntry, Unverified,
     },
     Error,
@@ -182,7 +181,7 @@ pub struct SelfInfoRes {
     pub token_expire_duration: Option<NonZeroU64>,
 
     pub permissions: Vec<Permission>,
-    pub departments: Vec<Department>,
+    pub departments: Vec<String>,
 }
 
 pub async fn self_info<Io: IoHandle>(
@@ -241,7 +240,7 @@ pub struct ModifyReq {
     pub password: Option<ModifyPasswordPart>,
 
     #[serde(default)]
-    pub departments: Option<Vec<Department>>,
+    pub departments: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -281,21 +280,13 @@ pub async fn modify<Io: IoHandle>(
         if let Some(t) = account.tags_mut().from_entry_mut(&TagEntry::Department) {
             t.clear()
         }
-        departments.iter_mut().for_each(Department::initialize_id);
-        let mut di = departments.iter();
-        if let Some(first) = di.next() {
-            let mut select = worlds.department.select(0, first.id());
-            for department in di {
-                select = select.plus(0, department.id())
-            }
-            let mut iter = select.iter();
-            while let Some(Ok(l)) = iter.next().await {
-                departments.iter().position(|d| l.id() == d.id()).map(|i| {
-                    account
-                        .tags_mut()
-                        .insert(Tag::Department(departments.swap_remove(i)))
-                });
-            }
+        if let Some(department) = departments.pop() {
+            account.tags_mut().insert(Tag::Department(department));
+            account
+                .tags_mut()
+                .from_entry_mut(&TagEntry::Department)
+                .unwrap()
+                .extend(departments.into_iter().map(Tag::Department))
         }
     }
 

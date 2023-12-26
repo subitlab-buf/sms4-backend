@@ -4,16 +4,13 @@ use std::{
 };
 
 use lettre::{transport::smtp, AsyncSmtpTransport};
+use libaccount::{Academy, House};
 use serde::{Deserialize, Serialize};
 
 use crate::{config, Error, TestCx};
 
-use self::{
-    department::Department,
-    verify::{Captcha, VerifyCx, VerifyVariant},
-};
+use self::verify::{Captcha, VerifyCx, VerifyVariant};
 
-pub mod department;
 pub mod verify;
 
 /// A permission group of an account.
@@ -31,9 +28,6 @@ pub enum Permission {
     Post,
     /// Get public posts.
     GetPubPosts,
-
-    /// Manage possible departments.
-    ManageDepartments,
 
     /// Appends or removes permissions from
     /// an account.
@@ -59,13 +53,17 @@ impl libaccount::Permission for Permission {
 #[serde(tag = "entry", content = "tag")]
 pub enum Tag {
     Permission(Permission),
-    Department(Department),
+    Department(String),
+    House(House),
+    Academy(Academy),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TagEntry {
     Permission,
     Department,
+    House,
+    Academy,
 }
 
 impl libaccount::tag::Tag for Tag {
@@ -76,6 +74,8 @@ impl libaccount::tag::Tag for Tag {
         match self {
             Tag::Permission(_) => TagEntry::Permission,
             Tag::Department(_) => TagEntry::Department,
+            Tag::House(_) => TagEntry::House,
+            Tag::Academy(_) => TagEntry::Academy,
         }
     }
 }

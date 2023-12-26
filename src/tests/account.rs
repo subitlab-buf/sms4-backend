@@ -1,6 +1,7 @@
 use dmds::StreamExt;
 use libaccount::Phone;
 use serde_json::json;
+use sms4_backend::account::{Permission, Tag, TagEntry};
 
 use crate::{routes::*, tests::router};
 
@@ -19,6 +20,7 @@ async fn creation() {
         .await
         .expect("captcha not sent");
 
+    // Simulates a wrong captcha.
     let wrong_captcha = sms4_backend::account::verify::Captcha::from(captcha.into_inner() + 1);
     let res = req!(route => REGISTER,
         json!({
@@ -40,6 +42,24 @@ async fn creation() {
             "phone": 12345678901_u64,
             "password": "shanlilinghuo",
             "captcha": captcha,
+            "tags": [
+                {
+                    "entry": "Permission",
+                    "tag": "Op"
+                },
+                {
+                    "entry": "Department",
+                    "tag": "SubIT"
+                },
+                {
+                    "entry": "Department",
+                    "tag": "击剑批"
+                },
+                {
+                    "entry": "House",
+                    "tag": 5
+                }
+            ]
         }) => json
     );
     assert!(res.status().is_success());
@@ -51,4 +71,20 @@ async fn creation() {
     assert_eq!(account.email(), "kongdechen2025@i.pkuschool.edu.cn");
     assert!(account.password_matches("shanlilinghuo"));
     assert_eq!(account.phone(), Some(Phone::new(86, 12345678901)));
+    assert_eq!(
+        account.tags().from_entry(&TagEntry::Permission),
+        Some(
+            &[Permission::GetPubPosts, Permission::Post]
+                .map(Tag::Permission)
+                .into()
+        )
+    );
+    assert_eq!(
+        account.tags().from_entry(&TagEntry::Department),
+        Some(
+            &["SubIT", "击剑批"]
+                .map(|s| Tag::Department(s.to_owned()))
+                .into()
+        )
+    )
 }

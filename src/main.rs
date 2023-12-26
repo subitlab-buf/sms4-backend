@@ -2,11 +2,7 @@ use std::sync::Arc;
 
 use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
-use sms4_backend::{
-    account::{department::Department, Account},
-    config::Config,
-    Error,
-};
+use sms4_backend::{account::Account, config::Config, Error};
 
 fn main() {}
 
@@ -44,14 +40,11 @@ impl<Io: IoHandle> Clone for Global<Io> {
 
 type AccountWorld<Io> = World<Account, 1, Io>;
 type UnverifiedAccountWorld<Io> = World<sms4_backend::account::Unverified, 1, Io>;
-type DepartmentWorld<Io> = World<Department, 1, Io>;
 
 #[derive(Debug)]
 pub struct Worlds<Io: IoHandle> {
     account: AccountWorld<Io>,
     unverified_account: UnverifiedAccountWorld<Io>,
-
-    department: DepartmentWorld<Io>,
 }
 
 mod handle {
