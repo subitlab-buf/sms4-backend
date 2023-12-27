@@ -117,7 +117,7 @@ async fn login() {
     let auth = Auth { account: id, token };
 
     let select = sa!(state.worlds.account, id);
-    assert!((|| async { Ok(va!(auth, select)) })().await.is_ok());
+    assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 }
 
 #[tokio::test]
@@ -140,16 +140,16 @@ async fn logout() {
     let wrong_res = req!(route => LOGOUT, auth_wrong, axum::body::Body::empty() => bytes);
     assert!(!wrong_res.status().is_success());
     let select = sa!(state.worlds.account, id);
-    assert!((|| async { Ok(va!(auth, select)) })().await.is_ok());
+    assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 
     let res = req!(route => LOGOUT, auth, axum::body::Body::empty() => bytes);
     assert!(res.status().is_success());
-    assert!((|| async { Ok(va!(auth, select)) })().await.is_err());
+    assert!(async { Ok(va!(auth, select)) }.await.is_err());
     let auth1 = Auth {
         account: id,
         token: token1,
     };
-    assert!((|| async { Ok(va!(auth1, select)) })().await.is_ok());
+    assert!(async { Ok(va!(auth1, select)) }.await.is_ok());
 }
 
 #[tokio::test]
