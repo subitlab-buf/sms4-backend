@@ -90,4 +90,37 @@ macro_rules! req {
     }};
 }
 
+macro_rules! init_acc {
+    ($s:expr, DCK, $($p:ident),*$(,)?) => {
+        $s
+        .worlds
+        .account
+        .insert(
+            libaccount::Account::new(
+                "kongdechen2025@i.pkuschool.edu.cn".to_owned(),
+                "Genshine Player".to_owned(),
+                2525505.to_string(),
+                Some(12345678901.into()),
+                Default::default(),
+                {
+                    use sms4_backend::account::Tag;
+                    let mut tags = libaccount::tag::Tags::new();
+                    $(tags.insert(Tag::Permission(sms4_backend::account::Permission::$p));)*
+                    tags.insert(Tag::Department("SubIT".to_owned()));
+                    tags.insert(Tag::Department("击剑批".to_owned()));
+                    tags.insert(Tag::House(libaccount::House::MingDe));
+                    tags
+                },
+                "shanlilinghuo".to_owned(),
+                std::time::Duration::from_secs(60),
+                siphasher::sip::SipHasher24::new(),
+            )
+            .into(),
+        )
+        .await
+        .unwrap();
+    };
+    ($s:expr, $t:tt) => { init_acc!($s, $t,) }
+}
+
 mod account;

@@ -16,10 +16,6 @@ pub mod verify;
 /// A permission group of an account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Permission {
-    /// Overpowered account permission.\
-    /// Contains all permissions.
-    Op,
-
     /// Post postings.
     ///
     /// # Containing permissions
@@ -44,7 +40,7 @@ impl libaccount::Permission for Permission {
     fn contains(&self, permission: &Self) -> bool {
         matches!(
             (self, permission),
-            (Permission::Op, _) | (Permission::Post, Permission::GetPubPosts)
+            (Permission::Post, Permission::GetPubPosts)
         )
     }
 }
@@ -113,7 +109,7 @@ impl libaccount::tag::UserDefinableEntry for TagEntry {
 
 /// The external data of a verified account.\
 /// Containing verify sessions.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Ext {
     verifies: HashMap<VerifyVariant, VerifyCx>,
 }

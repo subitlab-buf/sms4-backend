@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use dmds::StreamExt;
 use libaccount::Phone;
 use serde_json::json;
-use sms4_backend::account::{Permission, Tag, TagEntry};
+use sms4_backend::account::{Account, Permission, Tag, TagEntry};
 
 use crate::{routes::*, tests::router};
 
@@ -94,4 +96,5 @@ async fn creation() {
 #[tokio::test]
 async fn login() {
     let (state, route) = router();
+    init_acc!(state, DCK);
 }
