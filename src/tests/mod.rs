@@ -40,8 +40,12 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
         .route(REGISTER, post(handle::account::register))
         .route(LOGIN, post(handle::account::login))
+        .route(
+            SEND_RESET_PASSWORD_CAPTCHA,
+            post(handle::account::send_reset_password_captcha),
+        )
         .route(RESET_PASSWORD, post(handle::account::reset_password))
-        .route(SELF_ACCOUNT_INFO, post(handle::account::self_info))
+        .route(SELF_ACCOUNT_INFO, get(handle::account::self_info))
         .route(MODIFY_ACCOUNT, post(handle::account::modify))
         .route(LOGOUT, post(handle::account::logout))
         .route(SET_PERMISSIONS, post(handle::account::set_permissions))
@@ -70,12 +74,16 @@ macro_rules! req {
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     };
-    ($r:expr => $u:expr, $a:expr, $b:expr => bytes) => {
-        let mut b = Some(Request::builder().uri($u).method(axum::http::Method::POST));
-        $a.append_to_req_builder(&mut $b);
+    ($r:expr => $u:expr, $a:expr, $b:expr => bytes) => {{
+        let mut b = Some(
+            axum::http::Request::builder()
+                .uri($u)
+                .method(axum::http::Method::POST),
+        );
+        $a.append_to_req_builder(&mut b);
         let req = b.unwrap().body(axum::body::Body::from($b)).unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
-    };
+    }};
     ($r:expr => $u:expr, $b:expr => json) => {{
         let req = axum::http::Request::builder()
             .uri($u)
@@ -88,39 +96,56 @@ macro_rules! req {
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     }};
+    ($r:expr => $u:expr, $b:expr => bytes) => {{
+        let req = axum::http::Request::builder()
+            .uri($u)
+            .method(axum::http::Method::POST)
+            .body(axum::body::Body::from($b))
+            .unwrap();
+        tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
+    }};
 }
 
-macro_rules! init_acc {
-    ($s:expr, DCK, $($p:ident),*$(,)?) => {
-        $s
-        .worlds
-        .account
-        .insert(
-            libaccount::Account::new(
-                "kongdechen2025@i.pkuschool.edu.cn".to_owned(),
-                "Genshine Player".to_owned(),
-                2525505.to_string(),
-                Some(12345678901.into()),
-                Default::default(),
-                {
-                    use sms4_backend::account::Tag;
-                    let mut tags = libaccount::tag::Tags::new();
-                    $(tags.insert(Tag::Permission(sms4_backend::account::Permission::$p));)*
-                    tags.insert(Tag::Department("SubIT".to_owned()));
-                    tags.insert(Tag::Department("击剑批".to_owned()));
-                    tags.insert(Tag::House(libaccount::House::MingDe));
-                    tags
-                },
-                "shanlilinghuo".to_owned(),
-                std::time::Duration::from_secs(60),
-                siphasher::sip::SipHasher24::new(),
-            )
-            .into(),
+macro_rules! acc_exp {
+    (DCK, $($p:ident),*$(,)?) => {
+        libaccount::Account::new(
+            "kongdechen2025@i.pkuschool.edu.cn".to_owned(),
+            "Genshine Player".to_owned(),
+            2525505.to_string(),
+            Some(12345678901.into()),
+            Default::default(),
+            {
+                use sms4_backend::account::Tag;
+                let mut tags = libaccount::tag::Tags::new();
+                $(tags.insert(Tag::Permission(sms4_backend::account::Permission::$p));)*
+                tags.insert(Tag::Department("SubIT".to_owned()));
+                tags.insert(Tag::Department("击剑批".to_owned()));
+                tags.insert(Tag::House(libaccount::House::MingDe));
+                tags
+            },
+            "shanlilinghuo".to_owned(),
+            std::time::Duration::from_secs(60),
+            siphasher::sip::SipHasher24::new(),
         )
-        .await
-        .unwrap();
+        .into()
     };
-    ($s:expr, $t:tt) => { init_acc!($s, $t,) }
+    ($t:tt) => { acc_exp!($t,) }
+}
+
+macro_rules! p_json {
+    ($r:expr) => {
+        serde_json::from_slice(
+            &http_body_util::BodyExt::collect($r.into_body())
+                .await
+                .unwrap()
+                .to_bytes(),
+        )
+        .unwrap()
+    };
+    ($r:expr => $t:ty) => {{
+        let val: $t = p_json!($r);
+        val
+    }};
 }
 
 mod account;

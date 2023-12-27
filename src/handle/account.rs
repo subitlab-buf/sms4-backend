@@ -95,7 +95,7 @@ pub struct LoginReq {
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LoginRes {
     pub id: u64,
     pub token: String,
@@ -167,7 +167,11 @@ pub async fn reset_password<Io: IoHandle>(
     let unverified = Unverified::new(email.to_string())?;
     let select = sa!(worlds.account, unverified.email_hash());
     let mut lazy = ga!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
-    lazy.get_mut().await?.reset_password(captcha, new_password)
+    let account = lazy.get_mut().await?;
+    account.reset_password(captcha, new_password)?;
+    // Clear all tokens after reseting password
+    account.clear_tokens();
+    Ok(())
 }
 
 #[derive(Serialize)]

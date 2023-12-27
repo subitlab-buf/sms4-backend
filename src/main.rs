@@ -9,7 +9,8 @@ fn main() {}
 mod routes {
     pub const SEND_CAPTCHA: &str = "/account/send-captcha";
     pub const REGISTER: &str = "/account/register";
-    pub const LOGIN: &str = "/account/send-reset-password-captcha";
+    pub const LOGIN: &str = "/account/login";
+    pub const SEND_RESET_PASSWORD_CAPTCHA: &str = "/account/send-reset-password-captcha";
     pub const RESET_PASSWORD: &str = "/account/reset-password";
     pub const SELF_ACCOUNT_INFO: &str = "/account/self-info";
     pub const MODIFY_ACCOUNT: &str = "/account/modify";
@@ -49,6 +50,7 @@ pub struct Worlds<Io: IoHandle> {
 
 mod handle {
     /// Selects an account.
+    #[macro_export]
     macro_rules! sa {
         ($w:expr, $id:expr) => {
             $w.select(0, $id).hint($id)
@@ -56,6 +58,7 @@ mod handle {
     }
 
     /// Gets an account from selection.
+    #[macro_export]
     macro_rules! ga {
         ($s:expr, $id:expr) => {{
             let mut iter = $s.iter();
@@ -70,9 +73,10 @@ mod handle {
     }
 
     /// Validates an account.
+    #[macro_export]
     macro_rules! va {
         ($a:expr, $s:expr => $($p:expr),*$(,)?) => {{
-            let lazy = ga!($s, $a.account).ok_or(Error::PermissionDenied)?;
+            let lazy = ga!($s, $a.account).ok_or(crate::Error::PermissionDenied)?;
             let a = lazy.get().await?;
             if a.is_token_valid(&$a.token) {
                 let _tags = a.tags();
