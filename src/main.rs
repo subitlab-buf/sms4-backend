@@ -16,6 +16,7 @@ mod routes {
     pub const MODIFY_ACCOUNT: &str = "/account/modify";
     pub const LOGOUT: &str = "/account/logout";
     pub const SET_PERMISSIONS: &str = "/account/set-permissions";
+    pub const GET_INFO: &str = "/account/get-info/:id";
 }
 
 #[derive(Debug)]
@@ -41,11 +42,13 @@ impl<Io: IoHandle> Clone for Global<Io> {
 
 type AccountWorld<Io> = World<Account, 1, Io>;
 type UnverifiedAccountWorld<Io> = World<sms4_backend::account::Unverified, 1, Io>;
+type PostWorld<Io> = World<sms4_backend::post::Post, 4, Io>;
 
 #[derive(Debug)]
 pub struct Worlds<Io: IoHandle> {
     account: AccountWorld<Io>,
     unverified_account: UnverifiedAccountWorld<Io>,
+    post: PostWorld<Io>,
 }
 
 mod handle {
@@ -75,12 +78,12 @@ mod handle {
     /// Validates an account.
     #[macro_export]
     macro_rules! va {
-        ($a:expr, $s:expr => $($p:expr),*$(,)?) => {{
+        ($a:expr, $s:expr => $($p:ident),*$(,)?) => {{
             let lazy = ga!($s, $a.account).ok_or(crate::Error::PermissionDenied)?;
             let a = lazy.get().await?;
             if a.is_token_valid(&$a.token) {
                 let _tags = a.tags();
-                if !($(_tags.contains_permission(&sms4_backend::account::Tag::Permission($p)) &&)* true) {
+                if !($(_tags.contains_permission(&sms4_backend::account::Tag::Permission(sms4_backend::account::Permission::$p)) &&)* true) {
                     return Err($crate::Error::PermissionDenied);
                 }
             } else {
@@ -94,6 +97,7 @@ mod handle {
     }
 
     pub mod account;
+    pub mod post;
 }
 
 #[derive(Debug)]

@@ -28,6 +28,9 @@ pub enum Permission {
     /// Appends or removes permissions from
     /// an account.
     SetPermissions,
+    /// Gets full information of an account.
+    ViewFullAccount,
+    ViewSimpleAccount,
 }
 
 impl libaccount::Permission for Permission {
@@ -41,11 +44,14 @@ impl libaccount::Permission for Permission {
         matches!(
             (self, permission),
             (Permission::Post, Permission::GetPubPosts)
+                | (Permission::SetPermissions, Permission::ViewFullAccount)
+                | (Permission::SetPermissions, Permission::ViewSimpleAccount)
+                | (Permission::ViewFullAccount, Permission::ViewSimpleAccount)
         )
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(tag = "entry", content = "tag")]
 pub enum Tag {
     Permission(Permission),

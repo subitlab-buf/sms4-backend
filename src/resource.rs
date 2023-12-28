@@ -1,10 +1,11 @@
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
+    time::SystemTime,
 };
 
 use serde::{Deserialize, Serialize};
-use time::{Instant, OffsetDateTime};
+use time::Instant;
 
 use crate::Error;
 
@@ -34,7 +35,7 @@ impl Resource {
     /// time and account.
     pub fn new(variant: Variant, account: u64) -> Self {
         let mut hasher = siphasher::sip::SipHasher24::new();
-        OffsetDateTime::now_utc().hash(&mut hasher);
+        SystemTime::now().hash(&mut hasher);
         account.hash(&mut hasher);
         rand::random::<i32>().hash(&mut hasher);
 

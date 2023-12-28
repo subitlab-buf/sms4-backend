@@ -1,13 +1,22 @@
-use std::{collections::HashSet, num::NonZeroU64};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroU64,
+};
 
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use dmds::{IoHandle, StreamExt};
-use libaccount::{tag::AsPermission, Phone, VerifyDescriptor};
+use libaccount::{
+    tag::{AsPermission, Tags},
+    Phone, VerifyDescriptor,
+};
 use serde::{Deserialize, Serialize};
 use sms4_backend::{
     account::{
         verify::{self, Captcha},
-        Permission, Tag, TagEntry, Unverified,
+        Account, Permission, Tag, TagEntry, Unverified,
     },
     Error,
 };
@@ -324,7 +333,7 @@ pub async fn set_permissions<Io: IoHandle>(
     }): Json<SetPermissionsReq>,
 ) -> Result<(), Error> {
     let select = sa!(worlds.account, auth.account);
-    let lazy = va!(auth, select => Permission::SetPermissions);
+    let lazy = va!(auth, select => SetPermissions);
     let this = lazy.get().await?;
     let permissions: HashSet<_> = permissions.into_iter().map(From::from).collect();
     let legal_perms = permissions
@@ -357,4 +366,112 @@ pub async fn set_permissions<Io: IoHandle>(
     }
 
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type")]
+pub enum GetInfoRes {
+    Simple {
+        name: String,
+        email: String,
+        departments: Vec<String>,
+    },
+    Full {
+        name: String,
+        email: String,
+        school_id: String,
+        phone: Option<Phone>,
+        tags: Tags<TagEntry, Tag>,
+    },
+}
+
+impl GetInfoRes {
+    fn from_simple(account: &Account) -> Self {
+        Self::Simple {
+            name: account.name().to_ascii_lowercase(),
+            email: account.email().to_owned(),
+            departments: account
+                .tags()
+                .from_entry(&TagEntry::Department)
+                .map_or(vec![], |set| {
+                    set.iter()
+                        .filter_map(|t| {
+                            if let Tag::Department(d) = t {
+                                Some(d.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                }),
+        }
+    }
+
+    fn from_full(account: &Account) -> Self {
+        Self::Full {
+            name: account.name().to_ascii_lowercase(),
+            email: account.email().to_owned(),
+            school_id: account.school_id().to_owned(),
+            phone: account.phone(),
+            tags: account.tags().clone(),
+        }
+    }
+}
+
+async fn get_info<Io: IoHandle>(
+    Path(target): Path<u64>,
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+) -> Result<Json<GetInfoRes>, Error> {
+    let select = sa!(worlds.account, auth.account);
+    let this_lazy = va!(auth, select => ViewSimpleAccount);
+    let select = sa!(worlds.account, target);
+    let lazy = ga!(select, target).ok_or(Error::TargetAccountNotFound)?;
+    let account = lazy.get().await?;
+
+    if this_lazy
+        .get()
+        .await?
+        .tags()
+        .contains_permission(&Tag::Permission(Permission::ViewFullAccount))
+    {
+        Ok(Json(GetInfoRes::from_full(account)))
+    } else {
+        Ok(Json(GetInfoRes::from_simple(account)))
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GetInfoReq {
+    pub accounts: Vec<u64>,
+}
+
+/// Bulk gets account info, returns a map from account id to simple account info,
+/// as returning a full account info is expensive.
+async fn bulk_get_info<Io: IoHandle>(
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+    Json(GetInfoReq { accounts }): Json<GetInfoReq>,
+) -> Result<Json<HashMap<u64, GetInfoRes>>, Error> {
+    let select = sa!(worlds.account, auth.account);
+    va!(auth, select => ViewSimpleAccount);
+    if let Some(last) = accounts.first().copied() {
+        let mut select = worlds.account.select(0, last);
+        for account in &accounts[1..] {
+            select = select.plus(0, *account);
+        }
+        select = select.hints(accounts[..].into_iter().copied());
+        let mut iter = select.iter();
+        let mut res = HashMap::with_capacity(accounts.len());
+        while let Some(Ok(lazy)) = iter.next().await {
+            if accounts.contains(&lazy.id()) {
+                if let Ok(account) = lazy.get().await {
+                    res.insert(account.id(), GetInfoRes::from_simple(account));
+                }
+            }
+        }
+        Ok(Json(res))
+    } else {
+        Ok(Json(HashMap::new()))
+    }
 }
