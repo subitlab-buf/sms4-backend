@@ -29,18 +29,14 @@ fn router() -> (Global<MemStorage>, Router) {
     let state = Global {
         smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
         worlds: Arc::new(crate::Worlds {
-            account: world!(MemStorage::new(), 1152921504606846976 | ..=u64::MAX),
-            unverified_account: world!(MemStorage::new(), 4611686018427387904 | ..=u64::MAX),
+            account: world!(MemStorage::new(), u64::MAX as usize / 16 => ..),
+            unverified_account: world!(MemStorage::new(), u64::MAX as usize / 4 => ..),
             post: world!(
                 MemStorage::new(),
-                // 16 chunks
-                1152921504606846976 | ..=u64::MAX,
-                // 4 chunks
-                92 | ..=367,
-                // 4 chunks
-                4611686018427387904 | ..=u64::MAX,
-                // 2 chunks
-                1 | ..=1
+                u64::MAX as usize / 16 => ..,
+                368 / 4 => ..=367,
+                u64::MAX as usize / 4 => ..,
+                1 => ..=1
             ),
         }),
         config: Arc::new(config),
