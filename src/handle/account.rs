@@ -418,7 +418,7 @@ impl GetInfoRes {
     }
 }
 
-async fn get_info<Io: IoHandle>(
+pub async fn get_info<Io: IoHandle>(
     Path(target): Path<u64>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
@@ -442,16 +442,16 @@ async fn get_info<Io: IoHandle>(
 }
 
 #[derive(Deserialize)]
-pub struct GetInfoReq {
+pub struct BulkGetInfoReq {
     pub accounts: Vec<u64>,
 }
 
 /// Bulk gets account info, returns a map from account id to simple account info,
 /// as returning a full account info is expensive.
-async fn bulk_get_info<Io: IoHandle>(
+pub async fn bulk_get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
-    Json(GetInfoReq { accounts }): Json<GetInfoReq>,
+    Json(BulkGetInfoReq { accounts }): Json<BulkGetInfoReq>,
 ) -> Result<Json<HashMap<u64, GetInfoRes>>, Error> {
     let select = sa!(worlds.account, auth.account);
     va!(auth, select => ViewSimpleAccount);

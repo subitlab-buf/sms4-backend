@@ -22,7 +22,7 @@ pub struct Resource {
     #[serde(skip)]
     id: u64,
     variant: Variant,
-    user: u64,
+    owner: u64,
 
     #[serde(skip)]
     used: bool,
@@ -42,9 +42,19 @@ impl Resource {
         Self {
             id: hasher.finish(),
             variant,
-            user: account,
+            owner: account,
             used: false,
         }
+    }
+
+    #[inline]
+    pub fn owner(&self) -> u64 {
+        self.owner
+    }
+
+    #[inline]
+    pub fn block(&mut self) {
+        self.used = true
     }
 }
 
@@ -158,7 +168,7 @@ impl UploadSessions {
             .get(&id)
             .ok_or(Error::ResourceUploadSessionNotFound(id))?
             .resource;
-        if res.user != user {
+        if res.owner != user {
             return Err(Error::PermissionDenied);
         }
 

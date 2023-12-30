@@ -76,7 +76,7 @@ async fn creation() {
     assert_eq!(
         account.tags().from_entry(&TagEntry::Permission),
         Some(
-            &[Permission::GetPubPosts, Permission::Post]
+            &[Permission::GetPubPost, Permission::Post]
                 .map(Tag::Permission)
                 .into()
         )

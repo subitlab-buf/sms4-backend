@@ -35,8 +35,13 @@ fn router() -> (Global<MemStorage>, Router) {
                 MemStorage::new(),
                 u64::MAX as usize / 16 => ..,
                 368 / 4 => ..=367,
-                u64::MAX as usize / 4 => ..,
-                1 => ..=1
+                u64::MAX as usize / 16 => ..,
+                1 => ..2
+            ),
+            resource: world!(
+                MemStorage::new(),
+                u64::MAX as usize / 256 => ..,
+                1 => ..2
             ),
         }),
         config: Arc::new(config),
@@ -44,6 +49,7 @@ fn router() -> (Global<MemStorage>, Router) {
     };
 
     let router: Router<()> = Router::new()
+        // account services
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
         .route(REGISTER, post(handle::account::register))
         .route(LOGIN, post(handle::account::login))
@@ -56,6 +62,13 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(MODIFY_ACCOUNT, post(handle::account::modify))
         .route(LOGOUT, post(handle::account::logout))
         .route(SET_PERMISSIONS, post(handle::account::set_permissions))
+        .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
+        .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
+        // post services
+        .route(NEW_POST, post(handle::post::new_post))
+        .route(GET_POST, get(handle::post::get_info))
+        .route(GET_POSTS, post(handle::post::bulk_get_info))
+        // append state
         .with_state(state.clone());
 
     (state, router)

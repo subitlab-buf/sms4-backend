@@ -5,7 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 
 /// A post.
 ///
@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 /// 2 -> creator uid
 /// 3 -> is approved
 /// ```
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Post {
     #[serde(skip)]
     id: u64,
@@ -34,6 +34,8 @@ pub struct Post {
 }
 
 impl Post {
+    pub const MAX_DUR: Duration = Duration::WEEK;
+
     pub fn new(
         title: String,
         notes: String,
@@ -54,6 +56,12 @@ impl Post {
             resources,
             states: vec![State::new(Status::Pending, account, notes)],
         }
+    }
+
+    /// Gets id of this post.
+    #[inline]
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Gets the overall states of this post.
@@ -118,7 +126,7 @@ impl dmds::Data for Post {
 }
 
 /// State of a [`Post`].
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct State {
     status: Status,
     #[serde(with = "time::serde::timestamp")]
@@ -165,6 +173,7 @@ impl State {
     }
 }
 
+/// Status of a post.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum Status {
     Pending,

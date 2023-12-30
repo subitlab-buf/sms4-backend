@@ -56,6 +56,11 @@ pub enum Error {
     #[error("auth header is not in {{account}}:{{token}} syntax")]
     InvalidAuthHeader,
 
+    #[error("the given resources list is empty")]
+    PostResourceEmpty,
+    #[error("post with given post id {0} not found")]
+    PostNotFound(u64),
+
     #[error("database errored")]
     Database(dmds::Error),
 

@@ -16,7 +16,13 @@ mod routes {
     pub const MODIFY_ACCOUNT: &str = "/account/modify";
     pub const LOGOUT: &str = "/account/logout";
     pub const SET_PERMISSIONS: &str = "/account/set-permissions";
-    pub const GET_INFO: &str = "/account/get-info/:id";
+    pub const GET_ACCOUNT_INFO: &str = "/account/get/:id";
+    pub const BULK_GET_ACCOUNT_INFO: &str = "/account/bulk-get";
+
+    pub const NEW_POST: &str = "/post/new";
+    pub const SELF_POST: &str = "/post/self-get";
+    pub const GET_POST: &str = "/post/get/:id";
+    pub const GET_POSTS: &str = "/post/bulk-get";
 }
 
 #[derive(Debug)]
@@ -43,12 +49,14 @@ impl<Io: IoHandle> Clone for Global<Io> {
 type AccountWorld<Io> = World<Account, 1, Io>;
 type UnverifiedAccountWorld<Io> = World<sms4_backend::account::Unverified, 1, Io>;
 type PostWorld<Io> = World<sms4_backend::post::Post, 4, Io>;
+type ResourceWorld<Io> = World<sms4_backend::resource::Resource, 2, Io>;
 
 #[derive(Debug)]
 pub struct Worlds<Io: IoHandle> {
     account: AccountWorld<Io>,
     unverified_account: UnverifiedAccountWorld<Io>,
     post: PostWorld<Io>,
+    resource: ResourceWorld<Io>,
 }
 
 mod handle {

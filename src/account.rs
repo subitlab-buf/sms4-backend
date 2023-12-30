@@ -23,12 +23,27 @@ pub enum Permission {
     /// - [`Self::GetPubPost`]
     Post,
     /// Get public posts.
-    GetPubPosts,
+    GetPubPost,
+    /// View, approve or reject posts.
+    ///
+    /// # Containing permissions
+    ///
+    /// - [`Self::GetPubPost`]
+    ReviewPost,
 
     /// Appends or removes permissions from
     /// an account.
+    ///
+    /// # Containing permissions
+    ///
+    /// - [`Self::ViewSimpleAccount`]
+    /// - [`Self::ViewFullAccount`]
     SetPermissions,
     /// Gets full information of an account.
+    ///
+    /// # Containing permissions
+    ///
+    /// - [`Self::ViewSimpleAccount`]
     ViewFullAccount,
     ViewSimpleAccount,
 }
@@ -36,17 +51,18 @@ pub enum Permission {
 impl libaccount::Permission for Permission {
     #[inline]
     fn default_set() -> std::collections::HashSet<Self> {
-        [Self::Post, Self::GetPubPosts].into()
+        [Self::Post, Self::GetPubPost].into()
     }
 
     #[inline]
     fn contains(&self, permission: &Self) -> bool {
         matches!(
             (self, permission),
-            (Permission::Post, Permission::GetPubPosts)
+            (Permission::Post, Permission::GetPubPost)
                 | (Permission::SetPermissions, Permission::ViewFullAccount)
                 | (Permission::SetPermissions, Permission::ViewSimpleAccount)
                 | (Permission::ViewFullAccount, Permission::ViewSimpleAccount)
+                | (Permission::ReviewPost, Permission::GetPubPost)
         )
     }
 }
