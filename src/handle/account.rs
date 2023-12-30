@@ -388,7 +388,7 @@ pub enum GetInfoRes {
 impl GetInfoRes {
     fn from_simple(account: &Account) -> Self {
         Self::Simple {
-            name: account.name().to_ascii_lowercase(),
+            name: account.name().to_owned(),
             email: account.email().to_owned(),
             departments: account
                 .tags()
@@ -409,7 +409,7 @@ impl GetInfoRes {
 
     fn from_full(account: &Account) -> Self {
         Self::Full {
-            name: account.name().to_ascii_lowercase(),
+            name: account.name().to_owned(),
             email: account.email().to_owned(),
             school_id: account.school_id().to_owned(),
             phone: account.phone(),
