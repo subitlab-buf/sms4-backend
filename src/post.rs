@@ -5,7 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use time::{Duration, OffsetDateTime};
+use time::{Date, Duration, OffsetDateTime};
 
 /// A post.
 ///
@@ -23,7 +23,7 @@ pub struct Post {
     id: u64,
     title: String,
     /// On-screen time range.
-    time: RangeInclusive<time::Date>,
+    time: RangeInclusive<Date>,
 
     /// List of resource ids this post used.
     resources: Box<[u64]>,
@@ -85,6 +85,11 @@ impl Post {
             .first()
             .expect("there should be at least one state in a post")
             .operator
+    }
+
+    /// Gets the time range of this post.
+    pub fn time(&self) -> &RangeInclusive<Date> {
+        &self.time
     }
 }
 

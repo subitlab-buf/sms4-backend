@@ -4,6 +4,12 @@ use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
 use sms4_backend::{account::Account, config::Config, Error};
 
+macro_rules! ipc {
+    ($c:literal) => {
+        ((u64::MAX as u128 + 1) / $c)
+    };
+}
+
 fn main() {}
 
 mod routes {

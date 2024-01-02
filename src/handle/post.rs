@@ -166,7 +166,7 @@ pub async fn filter_posts<Io: IoHandle>(
         if let Ok(val) = lazy.get().await {
             if creator.map_or(false, |c| val.creator() != c)
                 || status.map_or(false, |s| val.state().status() != s)
-                || start.map_or(false, |d| val.time().start() <= d)
+                || start.map_or(false, |d| val.time().start() <= &d)
             {
                 continue;
             }
