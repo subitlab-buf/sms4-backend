@@ -11,7 +11,7 @@ use sms4_backend::{
     post::Post,
     Error,
 };
-use time::Date;
+use time::{Date, OffsetDateTime};
 
 use crate::{Auth, Global};
 
@@ -92,12 +92,9 @@ pub struct FilterPostsParams {
     #[serde(default)]
     pub status: Option<sms4_backend::post::Status>,
 
-    /// Specify posts start time.
+    /// Specify posts available time.
     #[serde(default)]
-    pub start: Option<Date>,
-    /// Specify posts end time.
-    #[serde(default)]
-    pub end: Option<Date>,
+    pub on: Option<Date>,
 }
 
 #[derive(Serialize)]
@@ -111,8 +108,7 @@ pub async fn filter_posts<Io: IoHandle>(
         limit,
         creator,
         status,
-        start,
-        end,
+        on,
     }): Query<FilterPostsParams>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
@@ -144,55 +140,114 @@ pub async fn filter_posts<Io: IoHandle>(
             select = select.and(3, 0);
         }
     }
-    if let Some(start) = start {
-        select = select.and(1, start.ordinal() as u64..);
-    }
-    if let Some(end) = end {
-        let ordinal = end.ordinal();
-        let start_o = (end - Post::MAX_DUR).ordinal();
-        if start_o > ordinal {
-            select = select.and(1, start_o as u64..).plus(1, ..ordinal as u64);
+    if let Some(on) = on {
+        let end_o = (on + Post::MAX_DUR).ordinal();
+        let start_o = (on - Post::MAX_DUR).ordinal();
+        if start_o > end_o {
+            select = select.and(1, start_o as u64..).plus(1, ..=end_o as u64);
         } else {
-            select = select.and(1, start_o as u64..ordinal as u64);
+            select = select.and(1, start_o as u64..=end_o as u64);
         }
     }
 
     let mut iter = select.iter();
     let mut posts = Vec::new();
     while let Some(Ok(lazy)) = iter.next().await {
-        if after.map_or(false, |a| lazy.id() <= a) {
+        if after.is_some_and(|a| lazy.id() <= a) {
             continue;
         }
         if let Ok(val) = lazy.get().await {
-            if creator.map_or(false, |c| val.creator() != c)
-                || status.map_or(false, |s| val.state().status() != s)
-                || start.map_or(false, |d| val.time().start() <= &d)
+            if creator.is_some_and(|c| val.creator() != c)
+                || status.is_some_and(|s| val.state().status() != s)
+                || on.is_some_and(|d| !val.time().contains(&d))
+                || (val.creator() != auth.account
+                    && !if matches!(val.state().status(), sms4_backend::post::Status::Approved) {
+                        permitted_get_pub
+                    } else {
+                        permitted_review
+                    })
             {
                 continue;
+            }
+            posts.push(val.id());
+            if posts.len() == limit {
+                break;
             }
         }
     }
     Ok(Json(FilterPostsRes { posts }))
 }
 
+#[derive(Serialize)]
+#[serde(tag = "type")]
+pub enum Info {
+    Simple {
+        id: u64,
+        title: String,
+        creator: u64,
+        /// List of resource ids this post used.
+        resources: Box<[u64]>,
+    },
+    Full {
+        id: u64,
+        creator: u64,
+        #[serde(flatten)]
+        inner: Post,
+    },
+}
+
+impl Info {
+    #[inline]
+    fn from_simple(post: &Post) -> Self {
+        Self::Simple {
+            id: post.id(),
+            title: post.title().to_owned(),
+            creator: post.creator(),
+            resources: post.resources().to_owned().into_boxed_slice(),
+        }
+    }
+
+    #[inline]
+    fn from_full(post: &Post) -> Self {
+        Self::Full {
+            id: post.id(),
+            creator: post.creator(),
+            inner: post.clone(),
+        }
+    }
+}
+
 pub async fn get_info<Io: IoHandle>(
     Path(id): Path<u64>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
-) -> Result<Json<Post>, Error> {
+) -> Result<Json<Info>, Error> {
     let select = sa!(worlds.account, auth.account);
     let this_lazy = va!(auth, select);
-    let permitted = this_lazy
+    let permitted_review = this_lazy
         .get()
         .await?
         .tags()
         .contains_permission(&Tag::Permission(Permission::ReviewPost));
+    let permitted_get_pub = this_lazy
+        .get()
+        .await?
+        .tags()
+        .contains_permission(&Tag::Permission(Permission::GetPubPost));
+    let now = OffsetDateTime::now_utc().date();
     let select = worlds.post.select(0, id).hint(id);
     let mut iter = select.iter();
     while let Some(Ok(lazy)) = iter.next().await {
-        if let Ok(val) = lazy.get().await {
-            if val.creator() == auth.account || permitted {
-                return Ok(Json(val.clone()));
+        if lazy.id() == id {
+            if let Ok(val) = lazy.get().await {
+                if val.creator() == auth.account || permitted_review {
+                    return Ok(Json(Info::from_full(&val)));
+                } else if permitted_get_pub
+                    && matches!(val.state().status(), sms4_backend::post::Status::Approved)
+                    && val.time().contains(&now)
+                {
+                    return Ok(Json(Info::from_simple(val)));
+                }
             }
         }
     }
@@ -206,7 +261,7 @@ pub struct BulkGetInfoReq {
 
 #[derive(Serialize)]
 pub struct BulkGetInfoRes {
-    pub posts: Vec<Post>,
+    pub posts: Vec<Info>,
 }
 
 pub async fn bulk_get_info<Io: IoHandle>(
@@ -216,11 +271,16 @@ pub async fn bulk_get_info<Io: IoHandle>(
 ) -> Result<Json<BulkGetInfoRes>, Error> {
     let select = sa!(worlds.account, auth.account);
     let this_lazy = va!(auth, select);
-    let permitted = this_lazy
+    let permitted_review = this_lazy
         .get()
         .await?
         .tags()
         .contains_permission(&Tag::Permission(Permission::ReviewPost));
+    let permitted_get_pub = this_lazy
+        .get()
+        .await?
+        .tags()
+        .contains_permission(&Tag::Permission(Permission::GetPubPost));
 
     let Some(first) = posts.get(0).copied() else {
         return Ok(Json(BulkGetInfoRes { posts: vec![] }));
@@ -230,13 +290,21 @@ pub async fn bulk_get_info<Io: IoHandle>(
         select = select.plus(0, id);
     }
     let mut iter = select.iter();
-    let mut posts = Vec::new();
+    let mut res = Vec::with_capacity(posts.len().max(64));
+    let now = OffsetDateTime::now_utc().date();
     while let Some(Ok(lazy)) = iter.next().await {
-        if let Ok(val) = lazy.get().await {
-            if val.creator() == auth.account || permitted {
-                posts.push(val.clone());
+        if posts.contains(&lazy.id()) {
+            if let Ok(val) = lazy.get().await {
+                if val.creator() == auth.account || permitted_review {
+                    res.push(Info::from_full(val));
+                } else if permitted_get_pub
+                    && matches!(val.state().status(), sms4_backend::post::Status::Approved)
+                    && val.time().contains(&now)
+                {
+                    res.push(Info::from_simple(val));
+                }
             }
         }
     }
-    Ok(Json(BulkGetInfoRes { posts }))
+    Ok(Json(BulkGetInfoRes { posts: res }))
 }

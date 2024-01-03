@@ -1,13 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
+    future::ready,
     num::NonZeroU64,
+    pin::{pin, Pin},
 };
 
 use axum::{
     extract::{Path, State},
     Json,
 };
-use dmds::{IoHandle, StreamExt};
+use dmds::IoHandle;
+use futures::StreamExt;
 use libaccount::{
     tag::{AsPermission, Tags},
     Phone, VerifyDescriptor,
@@ -47,24 +50,23 @@ pub async fn send_captcha<Io: IoHandle>(
         .unverified_account
         .select(0, unverified.email_hash())
         .hint(unverified.email_hash());
-    let mut iter = select.iter();
-    while let Some(Ok(mut lazy)) = iter.next().await {
-        if lazy.id() == unverified.email_hash() {
-            if let Ok(val) = lazy.get_mut().await {
-                if val.email() == unverified.email() {
-                    val.send_captcha(&config.smtp, &smtp_transport, &test_cx)
-                        .await?;
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    unverified
-        .send_captcha(&config.smtp, &smtp_transport, &test_cx)
-        .await?;
-    worlds.unverified_account.insert(unverified).await?;
-    Ok(())
+    let iter = select
+        .iter()
+        .filter_map(|r| ready(r.ok()))
+        .filter(|v| ready(v.id() == unverified.email_hash()));
+    let res = if let Some(mut l) = pin!(iter).next().await {
+        l.get_mut()
+            .await?
+            .send_captcha(&config.smtp, &smtp_transport, &test_cx)
+            .await
+    } else {
+        unverified
+            .send_captcha(&config.smtp, &smtp_transport, &test_cx)
+            .await?;
+        worlds.unverified_account.insert(unverified).await?;
+        Ok(())
+    };
+    res
 }
 
 #[derive(Deserialize)]
@@ -192,9 +194,7 @@ pub struct SelfInfoRes {
 
     /// Duration, as seconds.
     pub token_expire_duration: Option<NonZeroU64>,
-
-    pub permissions: Vec<Permission>,
-    pub departments: Vec<String>,
+    pub tags: Tags<TagEntry, Tag>,
 }
 
 pub async fn self_info<Io: IoHandle>(
@@ -210,29 +210,7 @@ pub async fn self_info<Io: IoHandle>(
         school_id: account.school_id().to_owned(),
         phone: account.phone(),
         token_expire_duration: account.token_expire_time(),
-        permissions: account
-            .tags()
-            .from_entry(&TagEntry::Permission)
-            .map_or(vec![], |set| {
-                set.iter()
-                    .filter_map(|t| t.as_permission())
-                    .copied()
-                    .collect()
-            }),
-        departments: account
-            .tags()
-            .from_entry(&TagEntry::Department)
-            .map_or(vec![], |set| {
-                set.iter()
-                    .filter_map(|t| {
-                        if let Tag::Department(d) = t {
-                            Some(d.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }),
+        tags: account.tags().clone(),
     }))
 }
 
@@ -351,7 +329,7 @@ pub async fn set_permissions<Io: IoHandle>(
     if this
         .tags()
         .from_entry(&TagEntry::Permission)
-        .map_or(false, |p| {
+        .is_some_and(|p| {
             target
                 .tags()
                 .from_entry(&TagEntry::Permission)

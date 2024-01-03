@@ -88,8 +88,21 @@ impl Post {
     }
 
     /// Gets the time range of this post.
+    #[inline]
     pub fn time(&self) -> &RangeInclusive<Date> {
         &self.time
+    }
+
+    /// Gets the title of this post.
+    #[inline]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Gets the resources used by this post.
+    #[inline]
+    pub fn resources(&self) -> &[u64] {
+        &self.resources
     }
 }
 
@@ -106,7 +119,7 @@ impl dmds::Data for Post {
             3 => self
                 .states
                 .last()
-                .map_or(false, |s| matches!(s.status, Status::Approved)) as u64,
+                .is_some_and(|s| matches!(s.status, Status::Approved)) as u64,
             _ => unreachable!(),
         }
     }
