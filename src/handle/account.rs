@@ -1,16 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
-    future::ready,
     num::NonZeroU64,
-    pin::{pin, Pin},
 };
 
 use axum::{
     extract::{Path, State},
     Json,
 };
-use dmds::IoHandle;
-use futures::StreamExt;
+use dmds::{IoHandle, StreamExt};
 use libaccount::{
     tag::{AsPermission, Tags},
     Phone, VerifyDescriptor,
@@ -50,23 +47,24 @@ pub async fn send_captcha<Io: IoHandle>(
         .unverified_account
         .select(0, unverified.email_hash())
         .hint(unverified.email_hash());
-    let iter = select
-        .iter()
-        .filter_map(|r| ready(r.ok()))
-        .filter(|v| ready(v.id() == unverified.email_hash()));
-    let res = if let Some(mut l) = pin!(iter).next().await {
-        l.get_mut()
-            .await?
-            .send_captcha(&config.smtp, &smtp_transport, &test_cx)
-            .await
-    } else {
-        unverified
-            .send_captcha(&config.smtp, &smtp_transport, &test_cx)
-            .await?;
-        worlds.unverified_account.insert(unverified).await?;
-        Ok(())
-    };
-    res
+    let mut iter = select.iter();
+    while let Some(Ok(mut lazy)) = iter.next().await {
+        if lazy.id() == unverified.email_hash() {
+            if let Ok(val) = lazy.get_mut().await {
+                if val.email() == unverified.email() {
+                    val.send_captcha(&config.smtp, &smtp_transport, &test_cx)
+                        .await?;
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    unverified
+        .send_captcha(&config.smtp, &smtp_transport, &test_cx)
+        .await?;
+    worlds.unverified_account.insert(unverified).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
