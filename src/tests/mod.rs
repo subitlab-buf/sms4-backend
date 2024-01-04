@@ -68,6 +68,10 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(FILTER_POSTS, get(handle::post::filter_posts))
         .route(GET_POST, get(handle::post::get_info))
         .route(GET_POSTS, post(handle::post::bulk_get_info))
+        .route(MODIFY_POST, post(handle::post::modify))
+        .route(REVIEW_POST, post(handle::post::review))
+        .route(DELETE_POST, post(handle::post::remove))
+        .route(BULK_DELETE_POST, post(handle::post::bulk_remove))
         // append state
         .with_state(state.clone());
     (state, router)

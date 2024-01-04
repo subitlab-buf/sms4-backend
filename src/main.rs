@@ -28,6 +28,10 @@ mod routes {
     pub const FILTER_POSTS: &str = "/post/filter";
     pub const GET_POST: &str = "/post/get/:id";
     pub const GET_POSTS: &str = "/post/bulk-get";
+    pub const MODIFY_POST: &str = "/post/modify/:id";
+    pub const REVIEW_POST: &str = "/post/review/:id";
+    pub const DELETE_POST: &str = "/post/delete/:id";
+    pub const BULK_DELETE_POST: &str = "/post/bulk-delete";
 }
 
 #[derive(Debug)]
