@@ -3,7 +3,7 @@ use libaccount::Phone;
 use serde_json::json;
 use sms4_backend::account::{Account, Permission, Tag, TagEntry};
 
-use crate::{ga, handle::account::LoginRes, routes::*, sa, tests::router, va, Auth};
+use crate::{gd, handle::account::LoginRes, routes::*, sd, tests::router, va, Auth};
 
 /// Send captcha and register an account.
 #[tokio::test]
@@ -116,7 +116,7 @@ async fn login() {
     let LoginRes { id, token, .. } = p_json!(res);
     let auth = Auth { account: id, token };
 
-    let select = sa!(state.worlds.account, id);
+    let select = sd!(state.worlds.account, id);
     assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 }
 
@@ -139,7 +139,7 @@ async fn logout() {
     };
     let wrong_res = req!(route => LOGOUT, auth_wrong, axum::body::Body::empty() => bytes);
     assert!(!wrong_res.status().is_success());
-    let select = sa!(state.worlds.account, id);
+    let select = sd!(state.worlds.account, id);
     assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 
     let res = req!(route => LOGOUT, auth, axum::body::Body::empty() => bytes);
@@ -180,10 +180,10 @@ async fn reset_password() {
         }) => json
     );
     assert!(!res.status().is_success());
-    let select = sa!(state.worlds.account, id);
+    let select = sd!(state.worlds.account, id);
     // Will dead lock if unblocked.
     {
-        let lazy = ga!(select, id).unwrap();
+        let lazy = gd!(select, id).unwrap();
         let account = lazy.get().await.unwrap();
         assert!(account.password_matches("shanlilinghuo"));
     }
@@ -196,7 +196,7 @@ async fn reset_password() {
         }) => json
     );
     assert!(res.status().is_success());
-    let lazy = ga!(select, id).unwrap();
+    let lazy = gd!(select, id).unwrap();
     let account = lazy.get().await.unwrap();
     assert!(account.password_matches("NERD"));
 }

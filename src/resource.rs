@@ -52,9 +52,27 @@ impl Resource {
         self.owner
     }
 
+    /// Marks this resource as used.
     #[inline]
-    pub fn block(&mut self) {
-        self.used = true
+    pub fn block(&mut self) -> Result<(), Error> {
+        if self.used {
+            return Err(Error::ResourceUsed(self.id));
+        }
+        self.used = true;
+        Ok(())
+    }
+
+    /// Marks this resource as unused.
+    #[inline]
+    pub fn unblock(&mut self) {
+        self.used = false
+    }
+
+    /// Whether this resource is currently
+    /// used by some data.
+    #[inline]
+    pub fn is_blocked(&self) -> bool {
+        self.used
     }
 }
 

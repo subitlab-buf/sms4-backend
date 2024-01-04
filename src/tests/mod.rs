@@ -53,12 +53,12 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
         .route(REGISTER, post(handle::account::register))
         .route(LOGIN, post(handle::account::login))
+        .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
         .route(
             SEND_RESET_PASSWORD_CAPTCHA,
             post(handle::account::send_reset_password_captcha),
         )
         .route(RESET_PASSWORD, post(handle::account::reset_password))
-        .route(SELF_ACCOUNT_INFO, get(handle::account::self_info))
         .route(MODIFY_ACCOUNT, post(handle::account::modify))
         .route(LOGOUT, post(handle::account::logout))
         .route(SET_PERMISSIONS, post(handle::account::set_permissions))
@@ -66,11 +66,11 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
         // post services
         .route(NEW_POST, post(handle::post::new_post))
+        .route(FILTER_POSTS, get(handle::post::filter_posts))
         .route(GET_POST, get(handle::post::get_info))
         .route(GET_POSTS, post(handle::post::bulk_get_info))
         // append state
         .with_state(state.clone());
-
     (state, router)
 }
 

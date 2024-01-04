@@ -18,7 +18,6 @@ mod routes {
     pub const LOGIN: &str = "/account/login";
     pub const SEND_RESET_PASSWORD_CAPTCHA: &str = "/account/send-reset-password-captcha";
     pub const RESET_PASSWORD: &str = "/account/reset-password";
-    pub const SELF_ACCOUNT_INFO: &str = "/account/self-info";
     pub const MODIFY_ACCOUNT: &str = "/account/modify";
     pub const LOGOUT: &str = "/account/logout";
     pub const SET_PERMISSIONS: &str = "/account/set-permissions";
@@ -26,7 +25,7 @@ mod routes {
     pub const BULK_GET_ACCOUNT_INFO: &str = "/account/bulk-get";
 
     pub const NEW_POST: &str = "/post/new";
-    pub const SELF_POST: &str = "/post/self-get";
+    pub const FILTER_POSTS: &str = "/post/filter";
     pub const GET_POST: &str = "/post/get/:id";
     pub const GET_POSTS: &str = "/post/bulk-get";
 }
@@ -66,17 +65,17 @@ pub struct Worlds<Io: IoHandle> {
 }
 
 mod handle {
-    /// Selects an account.
+    /// Selects an item.
     #[macro_export]
-    macro_rules! sa {
+    macro_rules! sd {
         ($w:expr, $id:expr) => {
             $w.select(0, $id).hint($id)
         };
     }
 
-    /// Gets an account from selection.
+    /// Gets an item from selection.
     #[macro_export]
-    macro_rules! ga {
+    macro_rules! gd {
         ($s:expr, $id:expr) => {{
             let mut iter = $s.iter();
             let mut lazy = None;
@@ -93,7 +92,7 @@ mod handle {
     #[macro_export]
     macro_rules! va {
         ($a:expr, $s:expr => $($p:ident),*$(,)?) => {{
-            let lazy = ga!($s, $a.account).ok_or(crate::Error::PermissionDenied)?;
+            let lazy = gd!($s, $a.account).ok_or(crate::Error::PermissionDenied)?;
             let a = lazy.get().await?;
             if a.is_token_valid(&$a.token) {
                 let _tags = a.tags();

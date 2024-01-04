@@ -1,11 +1,13 @@
 use std::{
     hash::{Hash, Hasher},
-    ops::RangeInclusive,
+    ops::{RangeBounds, RangeInclusive},
     time::SystemTime,
 };
 
 use serde::{Deserialize, Serialize};
 use time::{Date, Duration, OffsetDateTime};
+
+use crate::Error;
 
 /// A post.
 ///
@@ -31,6 +33,30 @@ pub struct Post {
     /// Post states in time order.\
     /// There should be at least one state in a post.
     states: Vec<State>,
+
+    /// Whether this post should be played as
+    /// a full sequence.
+    grouped: bool,
+    priority: Priority,
+}
+
+pub fn validate_time(time: &RangeInclusive<Date>) -> Result<(), Error> {
+    let dur = Duration::days(
+        u32::try_from(
+            time.end()
+                .to_julian_day()
+                .checked_sub(time.start().to_julian_day())
+                .ok_or_else(|| Error::PostTimeRangeOutOfBound(Duration::MAX))?,
+        )
+        .map_err(|_| Error::PostTimeRangeOutOfBound(Duration::MAX))? as i64,
+    );
+    if dur > Post::MAX_DUR {
+        Err(Error::PostTimeRangeOutOfBound(dur))
+    } else if *time.end() < OffsetDateTime::now_utc().date() {
+        Err(Error::PostTimeEnded)
+    } else {
+        Ok(())
+    }
 }
 
 impl Post {
@@ -42,20 +68,26 @@ impl Post {
         time: RangeInclusive<time::Date>,
         resources: Box<[u64]>,
         account: u64,
-    ) -> Self {
+        grouped: bool,
+        priority: Priority,
+    ) -> Result<Self, Error> {
+        validate_time(&time)?;
+
         let mut hasher = siphasher::sip::SipHasher24::new();
         title.hash(&mut hasher);
         account.hash(&mut hasher);
         time.hash(&mut hasher);
         SystemTime::now().hash(&mut hasher);
 
-        Self {
+        Ok(Self {
             id: hasher.finish(),
             title,
             time,
             resources,
             states: vec![State::new(Status::Pending, account, notes)],
-        }
+            grouped,
+            priority,
+        })
     }
 
     /// Gets id of this post.
@@ -64,10 +96,33 @@ impl Post {
         self.id
     }
 
+    /// Gets the title of this post.
+    #[inline]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Sets the title of this post.
+    #[inline]
+    pub fn set_title(&mut self, title: String) {
+        self.title = title;
+    }
+
     /// Gets the overall states of this post.
     #[inline]
     pub fn states(&self) -> &[State] {
         &self.states
+    }
+
+    /// Pushes a state into this post.
+    pub fn pust_state(&mut self, state: State) -> Result<(), Error> {
+        if self.state().status() == state.status()
+            && matches!(state.status(), Status::Approved | Status::Rejected)
+        {
+            return Err(Error::PostReviewedWithSameStatus);
+        }
+        self.states.push(state);
+        Ok(())
     }
 
     /// The current state of this post.
@@ -87,22 +142,44 @@ impl Post {
             .operator
     }
 
+    #[inline]
+    pub fn priority(&self) -> Priority {
+        self.priority
+    }
+
     /// Gets the time range of this post.
     #[inline]
     pub fn time(&self) -> &RangeInclusive<Date> {
         &self.time
     }
 
-    /// Gets the title of this post.
+    /// Sets the time range of this post.
     #[inline]
-    pub fn title(&self) -> &str {
-        &self.title
+    pub fn set_time(&mut self, time: RangeInclusive<Date>) -> Result<(), Error> {
+        validate_time(&time)?;
+        self.time = time;
+        Ok(())
     }
 
     /// Gets the resources used by this post.
     #[inline]
     pub fn resources(&self) -> &[u64] {
         &self.resources
+    }
+
+    #[inline]
+    pub fn set_resources(&mut self, resources: Box<[u64]>) {
+        self.resources = resources
+    }
+
+    #[inline]
+    pub fn is_grouped(&self) -> bool {
+        self.grouped
+    }
+
+    #[inline]
+    pub fn set_is_grouped(&mut self, grouped: bool) {
+        self.grouped = grouped
     }
 }
 

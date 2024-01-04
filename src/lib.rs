@@ -4,6 +4,7 @@ use account::verify::VerifyVariant;
 use axum::{http::StatusCode, response::IntoResponse};
 use lettre::transport::smtp;
 use serde::Serialize;
+use time::Duration;
 
 pub mod config;
 
@@ -56,10 +57,22 @@ pub enum Error {
     #[error("auth header is not in {{account}}:{{token}} syntax")]
     InvalidAuthHeader,
 
-    #[error("the given resources list is empty")]
+    #[error("the given post resources list is empty")]
     PostResourceEmpty,
     #[error("post with given post id {0} not found")]
     PostNotFound(u64),
+    #[error(
+        "post time range out of bound: given duration: {0}, expected: <= {}",
+        post::Post::MAX_DUR
+    )]
+    PostTimeRangeOutOfBound(Duration),
+    #[error("given post end time is earlier than now")]
+    PostTimeEnded,
+    #[error("the post has been reviewed with the same status of given state")]
+    PostReviewedWithSameStatus,
+
+    #[error("resource {0} has already be used")]
+    ResourceUsed(u64),
 
     #[error("database errored")]
     Database(dmds::Error),
@@ -80,6 +93,7 @@ impl Error {
             Error::Lettre(_) | Error::Smtp(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::NotLoggedIn => StatusCode::UNAUTHORIZED,
             Error::HeaderNonAscii(_) | Error::InvalidAuthHeader => StatusCode::BAD_REQUEST,
+            Error::ResourceUsed(_) => StatusCode::CONFLICT,
             Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Unknown => StatusCode::IM_A_TEAPOT,
             _ => StatusCode::FORBIDDEN,

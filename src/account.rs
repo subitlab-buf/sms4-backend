@@ -30,6 +30,13 @@ pub enum Permission {
     ///
     /// - [`Self::GetPubPost`]
     ReviewPost,
+    /// Remove posts.
+    ///
+    /// # Containing permissions
+    ///
+    /// - [`Self::GetPubPost`]
+    /// - [`Self::ReviewPost`]
+    RemovePost,
 
     /// Appends or removes permissions from
     /// an account.
@@ -59,10 +66,16 @@ impl libaccount::Permission for Permission {
         matches!(
             (self, permission),
             (Permission::Post, Permission::GetPubPost)
-                | (Permission::SetPermissions, Permission::ViewFullAccount)
-                | (Permission::SetPermissions, Permission::ViewSimpleAccount)
+                | (
+                    Permission::SetPermissions,
+                    Permission::ViewFullAccount | Permission::ViewSimpleAccount
+                )
                 | (Permission::ViewFullAccount, Permission::ViewSimpleAccount)
                 | (Permission::ReviewPost, Permission::GetPubPost)
+                | (
+                    Permission::RemovePost,
+                    Permission::GetPubPost | Permission::ReviewPost
+                )
         )
     }
 }

@@ -38,8 +38,8 @@ pub async fn send_captcha<Io: IoHandle>(
     Json(SendCaptchaReq { email }): Json<SendCaptchaReq>,
 ) -> Result<(), Error> {
     let mut unverified = Unverified::new(email.to_string())?;
-    let select = sa!(worlds.account, unverified.email_hash());
-    if ga!(select, unverified.email_hash()).is_some() {
+    let select = sd!(worlds.account, unverified.email_hash());
+    if gd!(select, unverified.email_hash()).is_some() {
         return Err(Error::PermissionDenied);
     }
 
@@ -116,9 +116,9 @@ pub async fn login<Io: IoHandle>(
     Json(LoginReq { email, password }): Json<LoginReq>,
 ) -> Result<Json<LoginRes>, Error> {
     let unverified = Unverified::new(email.to_string())?;
-    let select = sa!(worlds.account, unverified.email_hash());
+    let select = sd!(worlds.account, unverified.email_hash());
     let mut lazy =
-        ga!(select, unverified.email_hash()).ok_or(Error::UsernameOrPasswordIncorrect)?;
+        gd!(select, unverified.email_hash()).ok_or(Error::UsernameOrPasswordIncorrect)?;
     let (token, exp_time) = lazy.get_mut().await?.login(&password).map_err(|err| {
         if matches!(err, libaccount::Error::PasswordIncorrect) {
             Error::UsernameOrPasswordIncorrect
@@ -149,8 +149,8 @@ pub async fn send_reset_password_captcha<Io: IoHandle>(
     Json(SendResetPasswordCaptchaReq { email }): Json<SendResetPasswordCaptchaReq>,
 ) -> Result<(), Error> {
     let unverified = Unverified::new(email.to_string())?;
-    let select = sa!(worlds.account, unverified.email_hash());
-    let mut lazy = ga!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
+    let select = sd!(worlds.account, unverified.email_hash());
+    let mut lazy = gd!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
     lazy.get_mut()
         .await?
         .req_reset_password(&config.smtp, &smtp_transport, &test_cx)
@@ -174,42 +174,13 @@ pub async fn reset_password<Io: IoHandle>(
     }): Json<ResetPasswordReq>,
 ) -> Result<(), Error> {
     let unverified = Unverified::new(email.to_string())?;
-    let select = sa!(worlds.account, unverified.email_hash());
-    let mut lazy = ga!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
+    let select = sd!(worlds.account, unverified.email_hash());
+    let mut lazy = gd!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
     let account = lazy.get_mut().await?;
     account.reset_password(captcha, new_password)?;
     // Clear all tokens after reseting password
     account.clear_tokens();
     Ok(())
-}
-
-#[derive(Serialize)]
-pub struct SelfInfoRes {
-    pub email: lettre::Address,
-    pub name: String,
-    pub school_id: String,
-    pub phone: Option<Phone>,
-
-    /// Duration, as seconds.
-    pub token_expire_duration: Option<NonZeroU64>,
-    pub tags: Tags<TagEntry, Tag>,
-}
-
-pub async fn self_info<Io: IoHandle>(
-    auth: Auth,
-    State(Global { worlds, .. }): State<Global<Io>>,
-) -> Result<Json<SelfInfoRes>, Error> {
-    let select = sa!(worlds.account, auth.account);
-    let lazy = va!(auth, select);
-    let account = lazy.get().await?;
-    Ok(Json(SelfInfoRes {
-        email: account.email().parse()?,
-        name: account.name().to_owned(),
-        school_id: account.school_id().to_owned(),
-        phone: account.phone(),
-        token_expire_duration: account.token_expire_time(),
-        tags: account.tags().clone(),
-    }))
 }
 
 #[derive(Deserialize)]
@@ -243,7 +214,7 @@ pub async fn modify<Io: IoHandle>(
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(mut req): Json<ModifyReq>,
 ) -> Result<(), Error> {
-    let select = sa!(worlds.account, auth.account);
+    let select = sd!(worlds.account, auth.account);
     let mut lazy = va!(auth, select);
     let account = lazy.get_mut().await?;
 
@@ -286,7 +257,7 @@ pub async fn logout<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<(), Error> {
-    let select = sa!(worlds.account, auth.account);
+    let select = sd!(worlds.account, auth.account);
     let mut lazy = va!(auth, select);
     lazy.get_mut()
         .await?
@@ -308,7 +279,7 @@ pub async fn set_permissions<Io: IoHandle>(
         permissions,
     }): Json<SetPermissionsReq>,
 ) -> Result<(), Error> {
-    let select = sa!(worlds.account, auth.account);
+    let select = sd!(worlds.account, auth.account);
     let lazy = va!(auth, select => SetPermissions);
     let this = lazy.get().await?;
     let permissions: HashSet<_> = permissions.into_iter().map(From::from).collect();
@@ -321,8 +292,8 @@ pub async fn set_permissions<Io: IoHandle>(
         .filter_map(Tag::as_permission)
         .copied();
 
-    let select_t = sa!(worlds.account, target_account);
-    let mut lazy_t = ga!(select_t, target_account).ok_or(Error::TargetAccountNotFound)?;
+    let select_t = sd!(worlds.account, target_account);
+    let mut lazy_t = gd!(select_t, target_account).ok_or(Error::TargetAccountNotFound)?;
     let target = lazy_t.get_mut().await?;
     if this
         .tags()
@@ -359,6 +330,18 @@ pub enum GetInfoRes {
         phone: Option<Phone>,
         tags: Tags<TagEntry, Tag>,
     },
+
+    /// Requester owns the account.
+    Owned {
+        email: String,
+        name: String,
+        school_id: String,
+        phone: Option<Phone>,
+
+        /// Duration, as seconds.
+        token_expire_duration: Option<NonZeroU64>,
+        tags: Tags<TagEntry, Tag>,
+    },
 }
 
 impl GetInfoRes {
@@ -392,6 +375,17 @@ impl GetInfoRes {
             tags: account.tags().clone(),
         }
     }
+
+    fn from_owned(account: &Account) -> Self {
+        Self::Owned {
+            email: account.email().to_owned(),
+            name: account.name().to_owned(),
+            school_id: account.school_id().to_owned(),
+            phone: account.phone(),
+            token_expire_duration: account.token_expire_time(),
+            tags: account.tags().clone(),
+        }
+    }
 }
 
 pub async fn get_info<Io: IoHandle>(
@@ -399,13 +393,15 @@ pub async fn get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<GetInfoRes>, Error> {
-    let select = sa!(worlds.account, auth.account);
+    let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select => ViewSimpleAccount);
-    let select = sa!(worlds.account, target);
-    let lazy = ga!(select, target).ok_or(Error::TargetAccountNotFound)?;
+    let select = sd!(worlds.account, target);
+    let lazy = gd!(select, target).ok_or(Error::TargetAccountNotFound)?;
     let account = lazy.get().await?;
 
-    if this_lazy
+    if auth.account == account.id() {
+        Ok(Json(GetInfoRes::from_owned(account)))
+    } else if this_lazy
         .get()
         .await?
         .tags()
@@ -429,7 +425,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(BulkGetInfoReq { accounts }): Json<BulkGetInfoReq>,
 ) -> Result<Json<HashMap<u64, GetInfoRes>>, Error> {
-    let select = sa!(worlds.account, auth.account);
+    let select = sd!(worlds.account, auth.account);
     va!(auth, select => ViewSimpleAccount);
     if let Some(last) = accounts.first().copied() {
         let mut select = worlds.account.select(0, last);
