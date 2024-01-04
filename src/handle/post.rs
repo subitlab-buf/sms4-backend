@@ -103,6 +103,10 @@ pub struct FilterPostsParams {
     /// Specify posts available time.
     #[serde(default)]
     pub on: Option<Date>,
+
+    /// Specify screen id.
+    #[serde(default)]
+    pub screen: Option<usize>,
 }
 
 impl FilterPostsParams {
@@ -121,6 +125,7 @@ pub async fn filter_posts<Io: IoHandle>(
         creator,
         status,
         on,
+        screen,
     }): Query<FilterPostsParams>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
@@ -165,7 +170,9 @@ pub async fn filter_posts<Io: IoHandle>(
     let mut iter = select.iter();
     let mut posts = Vec::new();
     while let Some(Ok(lazy)) = iter.next().await {
-        if after.is_some_and(|a| lazy.id() <= a) {
+        if after.is_some_and(|a| lazy.id() <= a)
+            || screen.is_some_and(|s| lazy.id() % (s + 1) as u64 != 0)
+        {
             continue;
         }
         if let Ok(val) = lazy.get().await {
