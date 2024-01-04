@@ -62,7 +62,6 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(MODIFY_ACCOUNT, post(handle::account::modify))
         .route(LOGOUT, post(handle::account::logout))
         .route(SET_PERMISSIONS, post(handle::account::set_permissions))
-        .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
         .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
         // post services
         .route(NEW_POST, post(handle::post::new_post))
