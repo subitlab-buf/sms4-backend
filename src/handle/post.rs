@@ -453,6 +453,9 @@ pub async fn review<Io: IoHandle>(
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ReviewPost);
+    if !matches!(status, Status::Approved | Status::Rejected) {
+        return Err(Error::InvalidPostStatus);
+    }
     let select = sd!(worlds.post, id);
     let mut lazy = gd!(select, id).ok_or(Error::PostNotFound(id))?;
     let post = lazy.get_mut().await?;
@@ -506,14 +509,16 @@ pub async fn remove<Io: IoHandle>(
 }
 
 #[derive(Deserialize)]
-pub struct BulkRemoveReq {
-    pub posts: Vec<u64>,
+#[serde(tag = "type")]
+pub enum BulkRemoveReq {
+    Posts { posts: Vec<u64> },
+    Unused,
 }
 
 pub async fn bulk_remove<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
-    Json(BulkRemoveReq { posts }): Json<BulkRemoveReq>,
+    Json(req): Json<BulkRemoveReq>,
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select => Post);
@@ -522,26 +527,51 @@ pub async fn bulk_remove<Io: IoHandle>(
         .await?
         .tags()
         .contains_permission(&Tag::Permission(Permission::RemovePost));
-
-    let Some(first) = posts.get(0).copied() else {
-        return Ok(());
-    };
-    let mut select = worlds.post.select(0, first).hints(posts.iter().copied());
-    for id in posts[1..].iter().copied() {
-        select = select.plus(0, id);
-    }
-    let mut iter = select.iter();
-
     let mut resources_rm = vec![];
 
-    while let Some(Ok(lazy)) = iter.next().await {
-        if posts.contains(&lazy.id()) {
-            let post = lazy.get().await?;
-            if post.creator() != auth.account && !permitted_rm {
-                continue;
+    match req {
+        BulkRemoveReq::Posts { posts } => {
+            let Some(first) = posts.get(0).copied() else {
+                return Ok(());
+            };
+            let mut select = worlds.post.select(0, first).hints(posts.iter().copied());
+            for id in posts[1..].iter().copied() {
+                select = select.plus(0, id);
             }
-            resources_rm.extend_from_slice(post.resources());
-            lazy.destroy().await?;
+            let mut iter = select.iter();
+
+            while let Some(Ok(lazy)) = iter.next().await {
+                if posts.contains(&lazy.id()) {
+                    let post = lazy.get().await?;
+                    if post.creator() != auth.account && !permitted_rm {
+                        continue;
+                    }
+                    resources_rm.extend_from_slice(post.resources());
+                    lazy.destroy().await?;
+                }
+            }
+        }
+        BulkRemoveReq::Unused => {
+            if !this_lazy
+                .get()
+                .await?
+                .tags()
+                .contains_permission(&Tag::Permission(Permission::Maintain))
+            {
+                return Err(Error::PermissionDenied);
+            }
+
+            let now = OffsetDateTime::now_utc();
+            let select = worlds.post.select_all();
+            let mut iter = select.iter();
+            while let Some(Ok(lazy)) = iter.next().await {
+                if let Ok(post) = lazy.get().await {
+                    if post.time().end() < &now.date() {
+                        resources_rm.extend_from_slice(post.resources());
+                        lazy.destroy().await?;
+                    }
+                }
+            }
         }
     }
 

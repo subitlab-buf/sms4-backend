@@ -68,8 +68,8 @@ pub enum Error {
     PostTimeRangeOutOfBound(Duration),
     #[error("given post end time is earlier than now")]
     PostTimeEnded,
-    #[error("the post has been reviewed with the same status of given state")]
-    PostReviewedWithSameStatus,
+    #[error("invalid review result status")]
+    InvalidPostStatus,
 
     #[error("resource {0} has already be used")]
     ResourceUsed(u64),

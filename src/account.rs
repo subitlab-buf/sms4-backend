@@ -53,6 +53,9 @@ pub enum Permission {
     /// - [`Self::ViewSimpleAccount`]
     ViewFullAccount,
     ViewSimpleAccount,
+
+    /// Maintain this system.
+    Maintain,
 }
 
 impl libaccount::Permission for Permission {

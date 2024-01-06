@@ -119,7 +119,7 @@ impl Post {
         if self.state().status() == state.status()
             && matches!(state.status(), Status::Approved | Status::Rejected)
         {
-            return Err(Error::PostReviewedWithSameStatus);
+            return Err(Error::InvalidPostStatus);
         }
         self.states.push(state);
         Ok(())
