@@ -8,10 +8,13 @@ pub struct Config {
     /// SMTP configuration.
     pub smtp: SMTP,
 
-    /// The root path of database.
+    /// The root path of the database.
     pub db_path: PathBuf,
     /// The port of HTTP server.
     pub port: u16,
+
+    /// The root path of resource files.
+    pub resource_path: PathBuf,
 }
 
 /// SMTP mailing configuration.

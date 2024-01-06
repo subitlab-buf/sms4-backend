@@ -268,11 +268,14 @@ impl State {
     }
 }
 
-/// Status of a post.
+/// Status of a [`Post`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum Status {
+    /// Pending for review.
     Pending,
+    /// Approved.
     Approved,
+    /// Rejected.
     Rejected,
 }
 

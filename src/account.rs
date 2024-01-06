@@ -54,6 +54,9 @@ pub enum Permission {
     ViewFullAccount,
     ViewSimpleAccount,
 
+    /// Upload resources.
+    UploadResource,
+
     /// Maintain this system.
     Maintain,
 }
@@ -61,7 +64,13 @@ pub enum Permission {
 impl libaccount::Permission for Permission {
     #[inline]
     fn default_set() -> std::collections::HashSet<Self> {
-        [Self::Post, Self::GetPubPost].into()
+        [
+            Self::Post,
+            Self::GetPubPost,
+            Self::ViewSimpleAccount,
+            Self::UploadResource,
+        ]
+        .into()
     }
 
     #[inline]

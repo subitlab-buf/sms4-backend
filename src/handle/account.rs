@@ -34,6 +34,7 @@ pub async fn send_captcha<Io: IoHandle>(
         worlds,
         config,
         test_cx,
+        ..
     }): State<Global<Io>>,
     Json(SendCaptchaReq { email }): Json<SendCaptchaReq>,
 ) -> Result<(), Error> {
@@ -145,6 +146,7 @@ pub async fn send_reset_password_captcha<Io: IoHandle>(
         worlds,
         config,
         test_cx,
+        ..
     }): State<Global<Io>>,
     Json(SendResetPasswordCaptchaReq { email }): Json<SendResetPasswordCaptchaReq>,
 ) -> Result<(), Error> {
@@ -317,7 +319,7 @@ pub async fn set_permissions<Io: IoHandle>(
 
 #[derive(Serialize)]
 #[serde(tag = "type")]
-pub enum GetInfoRes {
+pub enum Info {
     Simple {
         name: String,
         email: String,
@@ -344,7 +346,7 @@ pub enum GetInfoRes {
     },
 }
 
-impl GetInfoRes {
+impl Info {
     fn from_simple(account: &Account) -> Self {
         Self::Simple {
             name: account.name().to_owned(),
@@ -392,7 +394,7 @@ pub async fn get_info<Io: IoHandle>(
     Path(target): Path<u64>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
-) -> Result<Json<GetInfoRes>, Error> {
+) -> Result<Json<Info>, Error> {
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select => ViewSimpleAccount);
     let select = sd!(worlds.account, target);
@@ -400,16 +402,16 @@ pub async fn get_info<Io: IoHandle>(
     let account = lazy.get().await?;
 
     if auth.account == account.id() {
-        Ok(Json(GetInfoRes::from_owned(account)))
+        Ok(Json(Info::from_owned(account)))
     } else if this_lazy
         .get()
         .await?
         .tags()
         .contains_permission(&Tag::Permission(Permission::ViewFullAccount))
     {
-        Ok(Json(GetInfoRes::from_full(account)))
+        Ok(Json(Info::from_full(account)))
     } else {
-        Ok(Json(GetInfoRes::from_simple(account)))
+        Ok(Json(Info::from_simple(account)))
     }
 }
 
@@ -424,7 +426,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(BulkGetInfoReq { accounts }): Json<BulkGetInfoReq>,
-) -> Result<Json<HashMap<u64, GetInfoRes>>, Error> {
+) -> Result<Json<HashMap<u64, Info>>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ViewSimpleAccount);
     if let Some(last) = accounts.first().copied() {
@@ -438,7 +440,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
         while let Some(Ok(lazy)) = iter.next().await {
             if accounts.contains(&lazy.id()) {
                 if let Ok(account) = lazy.get().await {
-                    res.insert(account.id(), GetInfoRes::from_simple(account));
+                    res.insert(account.id(), Info::from_simple(account));
                 }
             }
         }

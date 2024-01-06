@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
-use sms4_backend::{account::Account, config::Config, Error};
+use sms4_backend::{account::Account, config::Config, resource, Error};
+use tokio::sync::{Mutex, RwLock};
 
 macro_rules! ipc {
     ($c:literal) => {
@@ -38,6 +39,7 @@ mod routes {
 pub struct Global<Io: IoHandle> {
     pub smtp_transport: Arc<AsyncSmtpTransport<lettre::Tokio1Executor>>,
     pub worlds: Arc<Worlds<Io>>,
+    pub resource_sessions: Arc<Mutex<resource::UploadSessions>>,
     pub config: Arc<Config>,
 
     pub test_cx: Arc<sms4_backend::TestCx>,
@@ -51,6 +53,7 @@ impl<Io: IoHandle> Clone for Global<Io> {
             worlds: self.worlds.clone(),
             config: self.config.clone(),
             test_cx: self.test_cx.clone(),
+            resource_sessions: self.resource_sessions.clone(),
         }
     }
 }
@@ -82,7 +85,7 @@ impl Auth {
         Self { account, token }
     }
 
-    const KEY: &str = "Authorization";
+    const KEY: &'static str = "Authorization";
 
     #[cfg(test)]
     pub fn append_to_req_builder(&self, builder: &mut Option<axum::http::request::Builder>) {

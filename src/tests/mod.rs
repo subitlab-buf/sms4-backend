@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::Router;
 use dmds::{mem_io_handle::MemStorage, world};
 use sms4_backend::config::Config;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::Global;
 
@@ -25,6 +26,7 @@ fn router() -> (Global<MemStorage>, Router) {
         },
         db_path: Default::default(),
         port: 8080,
+        resource_path: PathBuf::from(".test/resources"),
     };
     let state = Global {
         smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
@@ -46,6 +48,7 @@ fn router() -> (Global<MemStorage>, Router) {
         }),
         config: Arc::new(config),
         test_cx: Default::default(),
+        resource_sessions: Arc::new(Mutex::new(sms4_backend::resource::UploadSessions::new())),
     };
 
     let router: Router<()> = Router::new()

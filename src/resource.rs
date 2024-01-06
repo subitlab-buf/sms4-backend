@@ -47,9 +47,21 @@ impl Resource {
         }
     }
 
+    /// Id of this resource.
+    #[inline]
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     #[inline]
     pub fn owner(&self) -> u64 {
         self.owner
+    }
+
+    /// Variant of this resource.
+    #[inline]
+    pub fn variant(&self) -> Variant {
+        self.variant
     }
 
     /// Marks this resource as used.
@@ -73,6 +85,13 @@ impl Resource {
     #[inline]
     pub fn is_blocked(&self) -> bool {
         self.used
+    }
+
+    const FILE_PREFIX: &'static str = "r_";
+
+    /// File name of this resource.
+    pub fn file_name(&self) -> String {
+        format!("{}{}", Self::FILE_PREFIX, self.id)
     }
 }
 
@@ -177,8 +196,8 @@ impl UploadSessions {
     /// Accepts the body of a resource with given id,
     /// and returns the resource.
     ///
-    /// *Id of the resource* will be changed, so you have to
-    /// tell the new id to *the frontend*.
+    /// **Id of the resource will be changed**, so you have to
+    /// tell the new id to the frontend.
     pub fn accept(&mut self, id: u64, data: &[u8], user: u64) -> Result<Resource, Error> {
         self.cleanup();
         let res = &self
@@ -197,10 +216,17 @@ impl UploadSessions {
     }
 }
 
-/// Type of a resource.
+/// Type of a [`Resource`].
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(tag = "type")]
 pub enum Variant {
     Image,
-    Pdf,
-    Video,
+    Pdf {
+        /// Number of pages.
+        pages: u16,
+    },
+    Video {
+        /// Video duration, as seconds.
+        duration: u32,
+    },
 }

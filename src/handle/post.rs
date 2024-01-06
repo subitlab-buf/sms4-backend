@@ -15,16 +15,61 @@ use time::{Date, OffsetDateTime};
 
 use crate::{Auth, Global};
 
+/// Request body for creating a new post.
+///
+/// # Examples
+///
+/// ```json
+/// {
+///     "title": "Test Post",
+///     "notes": "This is a test post.",
+///     "time": {
+///         "start": "2021-09-01",
+///         "end": "2021-09-05",
+///     },
+///     "resources": [1, 2, 3],
+///     "grouped": true,
+///     "priority": "Normal",
+/// }
+/// ```
 #[derive(Deserialize)]
 pub struct NewPostReq {
+    /// Title of the post.
     pub title: String,
+    /// Notes of the post.
+    ///
+    /// The notes will be stored as the notes of
+    /// initialize state of the post.
     pub notes: String,
+    /// Time range of the post.
     pub time: RangeInclusive<time::Date>,
+    /// List of resource ids this post used.
     pub resources: Box<[u64]>,
+    /// Whether this post should be played as
+    /// a full sequence.
     pub grouped: bool,
+    /// Priority of the post.
     pub priority: Priority,
 }
 
+/// Creates a new post.
+///
+/// # Request
+///
+/// The request body is declared as [`NewPostReq`].
+///
+/// # Authorization
+///
+/// The request must be authorized with [`Permission::Post`].
+///
+/// # Errors
+///
+/// The request will returns an error if:
+///
+/// - The given resources are not owned by the
+/// creator of this post, or there is no any
+/// resource in the given list.
+/// - The given time range is longer than **one week**.
 pub async fn new_post<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
@@ -84,27 +129,44 @@ pub async fn new_post<Io: IoHandle>(
         .map_err(|_| Error::PermissionDenied)
 }
 
+/// Request URL query parameters for filtering posts.
+///
+/// # Examples
+///
+/// ```json
+/// {
+///     "limit": 16,
+///     "creator": 345,
+/// }
+/// ```
 #[derive(Deserialize)]
 pub struct FilterPostsParams {
-    /// Specify posts after this id.
+    /// Filter posts after this id.\
+    /// The field can be omitted.
     #[serde(default)]
     pub after: Option<u64>,
-    /// Max posts to return.
+    /// Max posts to return.\
+    /// The field can be omitted,
+    /// and the default value is **64**.
     #[serde(default = "FilterPostsParams::DEFAULT_LIMIT")]
     pub limit: usize,
 
-    /// Specify posts creator.
+    /// Filter posts creator.\
+    /// The field can be omitted.
     #[serde(default)]
     pub creator: Option<u64>,
-    /// Specify posts status.
+    /// Filter with post status.\
+    /// The field can be omitted.
     #[serde(default)]
     pub status: Option<sms4_backend::post::Status>,
 
-    /// Specify posts available time.
+    /// Filter with post available time.\
+    /// The field can be omitted.
     #[serde(default)]
     pub on: Option<Date>,
 
-    /// Specify screen id.
+    /// Filter with screen id.\
+    /// The field can be omitted.
     #[serde(default)]
     pub screen: Option<usize>,
 }
@@ -113,11 +175,30 @@ impl FilterPostsParams {
     const DEFAULT_LIMIT: fn() -> usize = || 64;
 }
 
+/// Response body for filtering posts.
+///
+/// # Examples
+///
+/// ```json
+/// {
+///     "posts": [1, 2, 3],
+/// }
+/// ```
 #[derive(Serialize)]
 pub struct FilterPostsRes {
+    /// List of post ids.
     pub posts: Vec<u64>,
 }
 
+/// Filters posts with given filter options.
+///
+/// # Request
+///
+/// The request **query parameters** is declared as [`FilterPostsParams`].
+///
+/// # Authorization
+///
+/// The request must be authorized.
 pub async fn filter_posts<Io: IoHandle>(
     Query(FilterPostsParams {
         after,
@@ -197,21 +278,43 @@ pub async fn filter_posts<Io: IoHandle>(
     Ok(Json(FilterPostsRes { posts }))
 }
 
+/// Represents information of a post.
 #[derive(Serialize)]
 #[serde(tag = "type")]
 pub enum Info {
+    /// Simple information of a post.
     Simple {
+        /// Id of the post.
         id: u64,
+        /// Title of the post.
         title: String,
+        /// Creator of this post.
         creator: u64,
         /// List of resource ids this post used.
         resources: Box<[u64]>,
+        /// Whether this post should be played as
+        /// a full sequence.
         grouped: bool,
+        /// Priority of the post.
         priority: Priority,
     },
+    /// Full information of a post.
+    ///
+    /// This variant is only available for
+    /// the creator of this post, or the
+    /// user with [`Permission::ReviewPost`].
+    ///
+    /// This variant can only be returned
+    /// by [`get_info`].
     Full {
+        /// Id of the post.
         id: u64,
+        /// Creator of this post.
         creator: u64,
+        /// The post.
+        ///
+        /// This field is flattened
+        /// in the data structure.
         #[serde(flatten)]
         inner: Post,
     },
@@ -494,6 +597,7 @@ pub async fn remove<Io: IoHandle>(
         let mut select = worlds
             .resource
             .select(0, first)
+            .and(1, 1)
             .hints(resources.iter().copied());
         for id in resources.iter().copied() {
             select = select.plus(0, id)
@@ -579,6 +683,7 @@ pub async fn bulk_remove<Io: IoHandle>(
         let mut select = worlds
             .resource
             .select(0, first)
+            .and(1, 1)
             .hints(resources_rm.iter().copied());
         for id in resources_rm.iter().copied() {
             select = select.plus(0, id)

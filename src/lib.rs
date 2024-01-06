@@ -73,6 +73,10 @@ pub enum Error {
 
     #[error("resource {0} has already be used")]
     ResourceUsed(u64),
+    #[error("resource save failed")]
+    ResourceSaveFailed,
+    #[error("resource {0} not found")]
+    ResourceNotFound(u64),
 
     #[error("database errored")]
     Database(dmds::Error),
@@ -87,15 +91,17 @@ impl Error {
             Error::VerifySessionNotFound(_)
             | Error::ResourceUploadSessionNotFound(_)
             | Error::TargetAccountNotFound
-            | Error::UnverifiedAccountNotFound => StatusCode::NOT_FOUND,
+            | Error::UnverifiedAccountNotFound
+            | Error::ResourceNotFound(_) => StatusCode::NOT_FOUND,
             Error::ReqTooFrequent(_) => StatusCode::TOO_MANY_REQUESTS,
             Error::EmailAddress(_) => StatusCode::BAD_REQUEST,
             Error::Lettre(_) | Error::Smtp(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::NotLoggedIn => StatusCode::UNAUTHORIZED,
             Error::HeaderNonAscii(_) | Error::InvalidAuthHeader => StatusCode::BAD_REQUEST,
             Error::ResourceUsed(_) => StatusCode::CONFLICT,
-            Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::Unknown => StatusCode::IM_A_TEAPOT,
+            Error::Database(_) | Error::Unknown | Error::ResourceSaveFailed => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             _ => StatusCode::FORBIDDEN,
         }
     }
