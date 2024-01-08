@@ -54,6 +54,15 @@ pub enum Permission {
     ViewFullAccount,
     ViewSimpleAccount,
 
+    /// Manage notifications.
+    ///
+    /// # Containing permissions
+    ///
+    /// - [`Self::GetPubNotifications`]
+    ManageNotifications,
+    /// Get public notifications.
+    GetPubNotifications,
+
     /// Upload resources.
     UploadResource,
 
@@ -69,6 +78,7 @@ impl libaccount::Permission for Permission {
             Self::GetPubPost,
             Self::ViewSimpleAccount,
             Self::UploadResource,
+            Self::GetPubNotifications,
         ]
         .into()
     }
@@ -87,6 +97,10 @@ impl libaccount::Permission for Permission {
                 | (
                     Permission::RemovePost,
                     Permission::GetPubPost | Permission::ReviewPost
+                )
+                | (
+                    Permission::ManageNotifications,
+                    Permission::GetPubNotifications
                 )
         )
     }

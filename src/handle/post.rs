@@ -52,6 +52,21 @@ pub struct NewPostReq {
     pub priority: Priority,
 }
 
+/// Response body for creating a new post.
+///
+/// # Examples
+///
+/// ```json
+/// {
+///     "id": 12,
+/// }
+/// ```
+#[derive(Serialize)]
+pub struct NewPostRes {
+    /// Id of the new post.
+    pub id: u64,
+}
+
 /// Creates a new post.
 ///
 /// # Request
@@ -61,6 +76,10 @@ pub struct NewPostReq {
 /// # Authorization
 ///
 /// The request must be authorized with [`Permission::Post`].
+///
+/// # Response
+///
+/// The response body is declared as [`NewPostRes`].
 ///
 /// # Errors
 ///
@@ -81,7 +100,7 @@ pub async fn new_post<Io: IoHandle>(
         grouped,
         priority,
     }): Json<NewPostReq>,
-) -> Result<(), Error> {
+) -> Result<Json<NewPostRes>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => Post);
 
@@ -114,19 +133,24 @@ pub async fn new_post<Io: IoHandle>(
         return Err(Error::PermissionDenied);
     }
 
+    let post = Post::new(
+        title,
+        notes,
+        time,
+        resources,
+        auth.account,
+        grouped,
+        priority,
+    )?;
+    let id = post.id();
+
     worlds
         .post
-        .try_insert(Post::new(
-            title,
-            notes,
-            time,
-            resources,
-            auth.account,
-            grouped,
-            priority,
-        )?)
+        .try_insert(post)
         .await
-        .map_err(|_| Error::PermissionDenied)
+        .map_err(|_| Error::PermissionDenied)?;
+
+    Ok(Json(NewPostRes { id }))
 }
 
 /// Request URL query parameters for filtering posts.
@@ -144,7 +168,7 @@ pub struct FilterPostsParams {
     /// Filter posts after this id.\
     /// The field can be omitted.
     #[serde(default)]
-    pub after: Option<u64>,
+    pub from: Option<u64>,
     /// Max posts to return.\
     /// The field can be omitted,
     /// and the default value is **64**.
@@ -199,9 +223,9 @@ pub struct FilterPostsRes {
 /// # Authorization
 ///
 /// The request must be authorized.
-pub async fn filter_posts<Io: IoHandle>(
+pub async fn filter<Io: IoHandle>(
     Query(FilterPostsParams {
-        after,
+        from,
         limit,
         creator,
         status,
@@ -225,8 +249,8 @@ pub async fn filter_posts<Io: IoHandle>(
         .contains_permission(&Tag::Permission(Permission::GetPubPost));
 
     let mut select = worlds.post.select_all();
-    if let Some(after) = after {
-        select = select.and(0, after..);
+    if let Some(from) = from {
+        select = select.and(0, from..);
     }
     if let Some(creator) = creator {
         select = select.and(2, creator);
@@ -251,7 +275,7 @@ pub async fn filter_posts<Io: IoHandle>(
     let mut iter = select.iter();
     let mut posts = Vec::new();
     while let Some(Ok(lazy)) = iter.next().await {
-        if after.is_some_and(|a| lazy.id() <= a)
+        if from.is_some_and(|a| lazy.id() <= a)
             || screen.is_some_and(|s| lazy.id() % (s + 1) as u64 != 0)
         {
             continue;
@@ -379,7 +403,7 @@ pub async fn get_info<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
-    pub posts: Vec<u64>,
+    pub posts: Box<[u64]>,
 }
 
 #[derive(Serialize)]
@@ -615,7 +639,7 @@ pub async fn remove<Io: IoHandle>(
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum BulkRemoveReq {
-    Posts { posts: Vec<u64> },
+    Posts { posts: Box<[u64]> },
     Unused,
 }
 

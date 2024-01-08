@@ -62,6 +62,7 @@ type AccountWorld<Io> = World<Account, 1, Io>;
 type UnverifiedAccountWorld<Io> = World<sms4_backend::account::Unverified, 1, Io>;
 type PostWorld<Io> = World<sms4_backend::post::Post, 4, Io>;
 type ResourceWorld<Io> = World<sms4_backend::resource::Resource, 2, Io>;
+type NotificationWorld<Io> = World<sms4_backend::notification::Notification, 2, Io>;
 
 #[derive(Debug)]
 pub struct Worlds<Io: IoHandle> {
@@ -69,6 +70,7 @@ pub struct Worlds<Io: IoHandle> {
     unverified_account: UnverifiedAccountWorld<Io>,
     post: PostWorld<Io>,
     resource: ResourceWorld<Io>,
+    notification: NotificationWorld<Io>,
 }
 
 mod handle;

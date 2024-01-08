@@ -43,5 +43,6 @@ macro_rules! va {
     }
 
 pub mod account;
+pub mod notification;
 pub mod post;
 pub mod resource;

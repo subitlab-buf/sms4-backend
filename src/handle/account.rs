@@ -295,7 +295,7 @@ pub async fn set_permissions<Io: IoHandle>(
         .copied();
 
     let select_t = sd!(worlds.account, target_account);
-    let mut lazy_t = gd!(select_t, target_account).ok_or(Error::TargetAccountNotFound)?;
+    let mut lazy_t = gd!(select_t, target_account).ok_or(Error::AccountNotFound)?;
     let target = lazy_t.get_mut().await?;
     if this
         .tags()
@@ -398,7 +398,7 @@ pub async fn get_info<Io: IoHandle>(
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select => ViewSimpleAccount);
     let select = sd!(worlds.account, target);
-    let lazy = gd!(select, target).ok_or(Error::TargetAccountNotFound)?;
+    let lazy = gd!(select, target).ok_or(Error::AccountNotFound)?;
     let account = lazy.get().await?;
 
     if auth.account == account.id() {

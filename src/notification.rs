@@ -67,6 +67,18 @@ impl Notification {
     pub fn id(&self) -> u64 {
         self.id
     }
+
+    /// Returns the start time of the notification.
+    #[inline]
+    pub fn time(&self) -> OffsetDateTime {
+        self.time
+    }
+
+    /// Returns the sender of the notification.
+    #[inline]
+    pub fn sender(&self) -> u64 {
+        self.sender
+    }
 }
 
 impl dmds::Data for Notification {

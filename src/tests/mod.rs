@@ -45,6 +45,11 @@ fn router() -> (Global<MemStorage>, Router) {
                 ipc!(256) => ..,
                 1 => ..2
             ),
+            notification: world! {
+                MemStorage::new(),
+                ipc!(32) => ..,
+                368 / 4 => ..=367
+            },
         }),
         config: Arc::new(config),
         test_cx: Default::default(),
@@ -68,7 +73,7 @@ fn router() -> (Global<MemStorage>, Router) {
         .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
         // post services
         .route(NEW_POST, post(handle::post::new_post))
-        .route(FILTER_POSTS, get(handle::post::filter_posts))
+        .route(FILTER_POSTS, get(handle::post::filter))
         .route(GET_POST, get(handle::post::get_info))
         .route(GET_POSTS, post(handle::post::bulk_get_info))
         .route(MODIFY_POST, post(handle::post::modify))

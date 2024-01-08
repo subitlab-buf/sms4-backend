@@ -81,6 +81,7 @@ async fn creation() {
                 Permission::Post,
                 Permission::UploadResource,
                 Permission::ViewSimpleAccount,
+                Permission::GetPubNotifications,
             ]
             .map(Tag::Permission)
             .into()

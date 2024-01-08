@@ -22,6 +22,7 @@ pub struct TestCx {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("account error: {0}")]
     LibAccount(libaccount::Error),
@@ -34,7 +35,7 @@ pub enum Error {
     #[error("username or password incorrect")]
     UsernameOrPasswordIncorrect,
     #[error("target operation account not found")]
-    TargetAccountNotFound,
+    AccountNotFound,
 
     #[error("captcha incorrect")]
     CaptchaIncorrect,
@@ -79,6 +80,9 @@ pub enum Error {
     #[error("resource {0} not found")]
     ResourceNotFound(u64),
 
+    #[error("notification {0} not found")]
+    NotificationNotFound(u64),
+
     #[error("database errored")]
     Database(dmds::Error),
 
@@ -91,9 +95,10 @@ impl Error {
         match self {
             Error::VerifySessionNotFound(_)
             | Error::ResourceUploadSessionNotFound(_)
-            | Error::TargetAccountNotFound
+            | Error::AccountNotFound
             | Error::UnverifiedAccountNotFound
-            | Error::ResourceNotFound(_) => StatusCode::NOT_FOUND,
+            | Error::ResourceNotFound(_)
+            | Error::NotificationNotFound(_) => StatusCode::NOT_FOUND,
             Error::ReqTooFrequent(_) => StatusCode::TOO_MANY_REQUESTS,
             Error::EmailAddress(_) => StatusCode::BAD_REQUEST,
             Error::Lettre(_) | Error::Smtp(_) => StatusCode::INTERNAL_SERVER_ERROR,
