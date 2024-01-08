@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
 use sms4_backend::{account::Account, config::Config, resource, Error};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 macro_rules! ipc {
     ($c:literal) => {

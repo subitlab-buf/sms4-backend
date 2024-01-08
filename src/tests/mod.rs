@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use axum::Router;
 use dmds::{mem_io_handle::MemStorage, world};
 use sms4_backend::config::Config;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 use crate::Global;
 

@@ -9,6 +9,7 @@ use time::Duration;
 pub mod config;
 
 pub mod account;
+pub mod notification;
 pub mod post;
 
 pub mod resource;
