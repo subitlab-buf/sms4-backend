@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -242,9 +244,158 @@ pub async fn get_info<Io: IoHandle>(
 }
 
 pub struct BulkGetInfoReq {
-    pub ids: Box<[u64]>,
+    pub notifications: Box<[u64]>,
 }
 
-pub async fn bulk_get_info<Io: IoHandle>() {
-    unimplemented!()
+pub async fn bulk_get_info<Io: IoHandle>(
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+    Json(BulkGetInfoReq { notifications }): Json<BulkGetInfoReq>,
+) -> Result<Json<HashMap<u64, Info>>, Error> {
+    let select = sd!(worlds.account, auth.account);
+    let this_lazy = va!(auth, select => GetPubPost);
+    let permitted_manage = this_lazy
+        .get()
+        .await?
+        .tags()
+        .contains_permission(&Tag::Permission(Permission::ManageNotifications));
+
+    let Some(first) = notifications.get(0).copied() else {
+        return Ok(Json(HashMap::new()));
+    };
+    let mut select = worlds
+        .notification
+        .select(0, first)
+        .hints(notifications.iter().copied());
+    for id in notifications[1..].iter().copied() {
+        select = select.plus(0, id);
+    }
+    let mut iter = select.iter();
+    let mut res = HashMap::with_capacity(notifications.len().max(64));
+    let now = OffsetDateTime::now_utc();
+    while let Some(Ok(lazy)) = iter.next().await {
+        if notifications.contains(&lazy.id()) {
+            if let Ok(val) = lazy.get().await {
+                if val.time() <= now && !permitted_manage {
+                    continue;
+                }
+                if permitted_manage {
+                    res.insert(val.id(), Info::from_full(val));
+                } else {
+                    res.insert(val.id(), Info::from_simple(val));
+                }
+            }
+        }
+    }
+    Ok(Json(res))
+}
+
+/// Removes a notification.
+///
+/// # Authorization
+///
+/// The request must be authorized with [`Permission::ManageNotifications`].
+pub async fn remove<Io: IoHandle>(
+    Path(id): Path<u64>,
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+) -> Result<(), Error> {
+    let select = sd!(worlds.account, auth.account);
+    va!(auth, select => ManageNotifications);
+
+    let select = sd!(worlds.notification, id);
+    gd!(select, id)
+        .ok_or(Error::NotificationNotFound(id))?
+        .destroy()
+        .await?;
+
+    Ok(())
+}
+
+/// Request body for bulk removing notifications.
+#[derive(Deserialize)]
+pub struct BulkRemoveReq {
+    pub notifications: Box<[u64]>,
+}
+
+/// Bulk removes notifications.
+///
+/// # Authorization
+///
+/// The request must be authorized with [`Permission::ManageNotifications`].
+///
+/// # Request
+///
+/// The request body is declared as [`BulkRemoveReq`].
+pub async fn bulk_remove<Io: IoHandle>(
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+    Json(BulkRemoveReq { notifications }): Json<BulkRemoveReq>,
+) -> Result<(), Error> {
+    let select = sd!(worlds.account, auth.account);
+    va!(auth, select => ManageNotifications);
+
+    if let Some(first) = notifications.first().copied() {
+        let mut select = worlds
+            .notification
+            .select(0, first)
+            .hints(notifications.iter().copied());
+        for id in notifications[1..].iter().copied() {
+            select = select.plus(0, id);
+        }
+
+        let mut iter = select.iter();
+        while let Some(Ok(lazy)) = iter.next().await {
+            if notifications.contains(&lazy.id()) {
+                lazy.destroy().await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Request body for modifying a notification.
+#[derive(Deserialize)]
+pub struct ModifyReq {
+    pub title: Option<String>,
+    pub body: Option<String>,
+
+    /// Modifies the start time of the notification.
+    pub time: Option<OffsetDateTime>,
+}
+
+/// Modifies a notification.
+///
+/// # Authorization
+///
+/// The request must be authorized with [`Permission::ManageNotifications`].
+///
+/// # Request
+///
+/// The request body is declared as [`ModifyReq`].
+pub async fn modify<Io: IoHandle>(
+    Path(id): Path<u64>,
+    auth: Auth,
+    State(Global { worlds, .. }): State<Global<Io>>,
+    Json(ModifyReq { title, body, time }): Json<ModifyReq>,
+) -> Result<(), Error> {
+    let select = sd!(worlds.account, auth.account);
+    va!(auth, select => ManageNotifications);
+    let select = sd!(worlds.notification, id);
+    let mut lazy = gd!(select, id).ok_or(Error::NotificationNotFound(id))?;
+    let val = lazy.get_mut().await?;
+
+    if let Some(title) = title {
+        val.title = title;
+    }
+    if let Some(body) = body {
+        val.body = body;
+    }
+
+    if let Some(time) = time {
+        val.set_time(time);
+    }
+
+    Ok(())
 }

@@ -74,6 +74,12 @@ impl Notification {
         self.time
     }
 
+    /// Sets the start time of the notification.
+    #[inline]
+    pub fn set_time(&mut self, time: OffsetDateTime) {
+        self.time = time;
+    }
+
     /// Returns the sender of the notification.
     #[inline]
     pub fn sender(&self) -> u64 {

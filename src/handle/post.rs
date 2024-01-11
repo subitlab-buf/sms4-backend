@@ -1,4 +1,7 @@
-use std::{collections::HashSet, ops::RangeInclusive};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::RangeInclusive,
+};
 
 use axum::{
     extract::{Path, Query, State},
@@ -308,8 +311,6 @@ pub async fn filter<Io: IoHandle>(
 pub enum Info {
     /// Simple information of a post.
     Simple {
-        /// Id of the post.
-        id: u64,
         /// Title of the post.
         title: String,
         /// Creator of this post.
@@ -331,10 +332,6 @@ pub enum Info {
     /// This variant can only be returned
     /// by [`get_info`].
     Full {
-        /// Id of the post.
-        id: u64,
-        /// Creator of this post.
-        creator: u64,
         /// The post.
         ///
         /// This field is flattened
@@ -348,7 +345,6 @@ impl Info {
     #[inline]
     fn from_simple(post: &Post) -> Self {
         Self::Simple {
-            id: post.id(),
             title: post.title().to_owned(),
             creator: post.creator(),
             resources: post.resources().to_owned().into_boxed_slice(),
@@ -360,8 +356,6 @@ impl Info {
     #[inline]
     fn from_full(post: &Post) -> Self {
         Self::Full {
-            id: post.id(),
-            creator: post.creator(),
             inner: post.clone(),
         }
     }
@@ -415,7 +409,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(BulkGetInfoReq { posts }): Json<BulkGetInfoReq>,
-) -> Result<Json<BulkGetInfoRes>, Error> {
+) -> Result<Json<HashMap<u64, Info>>, Error> {
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select);
     let permitted_review = this_lazy
@@ -430,30 +424,30 @@ pub async fn bulk_get_info<Io: IoHandle>(
         .contains_permission(&Tag::Permission(Permission::GetPubPost));
 
     let Some(first) = posts.get(0).copied() else {
-        return Ok(Json(BulkGetInfoRes { posts: vec![] }));
+        return Ok(Json(HashMap::new()));
     };
     let mut select = worlds.post.select(0, first).hints(posts.iter().copied());
     for id in posts[1..].iter().copied() {
         select = select.plus(0, id);
     }
     let mut iter = select.iter();
-    let mut res = Vec::with_capacity(posts.len().max(64));
+    let mut res = HashMap::with_capacity(posts.len().max(64));
     let now = OffsetDateTime::now_utc().date();
     while let Some(Ok(lazy)) = iter.next().await {
         if posts.contains(&lazy.id()) {
             if let Ok(val) = lazy.get().await {
                 if val.creator() == auth.account || permitted_review {
-                    res.push(Info::from_full(val));
+                    res.insert(val.id(), Info::from_full(val));
                 } else if permitted_get_pub
                     && matches!(val.state().status(), sms4_backend::post::Status::Approved)
                     && val.time().contains(&now)
                 {
-                    res.push(Info::from_simple(val));
+                    res.insert(val.id(), Info::from_simple(val));
                 }
             }
         }
     }
-    Ok(Json(BulkGetInfoRes { posts: res }))
+    Ok(Json(res))
 }
 
 #[derive(Deserialize)]
@@ -478,7 +472,7 @@ pub struct ModifyReq {
 }
 
 pub async fn modify<Io: IoHandle>(
-    Query(id): Query<u64>,
+    Path(id): Path<u64>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(mut req): Json<ModifyReq>,
