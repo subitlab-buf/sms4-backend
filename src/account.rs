@@ -15,6 +15,7 @@ pub mod verify;
 
 /// A permission group of an account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[non_exhaustive]
 pub enum Permission {
     /// Post postings.
     ///

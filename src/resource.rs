@@ -93,6 +93,13 @@ impl Resource {
     pub fn file_name(&self) -> String {
         format!("{}{}", Self::FILE_PREFIX, self.id)
     }
+
+    const BUF_PREFIX: &'static str = "buf_";
+
+    /// Buffer file name of this resource.
+    pub fn buf_name(&self) -> String {
+        format!("{}{}", Self::BUF_PREFIX, self.id)
+    }
 }
 
 impl dmds::Data for Resource {
@@ -198,7 +205,12 @@ impl UploadSessions {
     ///
     /// **Id of the resource will be changed**, so you have to
     /// tell the new id to the frontend.
-    pub fn accept(&mut self, id: u64, data: &[u8], user: u64) -> Result<Resource, Error> {
+    pub fn accept<H: Hasher>(
+        &mut self,
+        id: u64,
+        mut hasher: H,
+        user: u64,
+    ) -> Result<Resource, Error> {
         self.cleanup();
         let res = &self
             .inner
@@ -210,9 +222,16 @@ impl UploadSessions {
         }
 
         let mut res = self.inner.remove(&id).unwrap().resource;
-        res.id =
-            highway::HighwayHash::hash64(highway::PortableHash::new(highway::Key::default()), data);
+        SystemTime::now().hash(&mut hasher);
+        user.hash(&mut hasher);
+        res.id = hasher.finish();
         Ok(res)
+    }
+
+    /// Gets filesystem buffer name of a resource session.
+    #[inline]
+    pub fn buf_name(&self, id: u64) -> Option<String> {
+        self.inner.get(&id).map(|s| s.resource.buf_name())
     }
 }
 

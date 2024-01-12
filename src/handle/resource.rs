@@ -109,20 +109,50 @@ pub async fn upload<Io: IoHandle>(
         config,
         ..
     }): State<Global<Io>>,
-    payload: axum::body::Bytes,
+    payload: axum::body::Body,
 ) -> Result<Json<UploadRes>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => UploadResource);
+
+    let mut hasher = highway::PortableHash::default();
+    let buf_path = config.resource_path.join(
+        resource_sessions
+            .lock()
+            .await
+            .buf_name(id)
+            .ok_or(Error::ResourceUploadSessionNotFound(id))?,
+    );
+    let mut file = tokio::fs::File::create(&buf_path)
+        .await
+        .map_err(|_| Error::ResourceSaveFailed)?;
+    let mut stream = http_body_util::BodyStream::new(payload);
+    while let Some(chunk) = stream
+        .try_next()
+        .await
+        .map_err(|_| Error::ResourceSaveFailed)?
+    {
+        let chunk = chunk.into_data().map_err(|_| Error::ResourceSaveFailed)?;
+        highway::HighwayHash::append(&mut hasher, &chunk);
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+            .await
+            .map_err(|_| Error::ResourceSaveFailed)?;
+    }
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(|_| Error::ResourceSaveFailed)?;
+    file.sync_data()
+        .await
+        .map_err(|_| Error::ResourceSaveFailed)?;
+
     let resource = resource_sessions
         .lock()
         .await
-        .accept(id, &payload, auth.account)?;
+        .accept(id, hasher, auth.account)?;
     let id = resource.id();
     let path = config.resource_path.join(resource.file_name());
-    if let Err(err) = tokio::fs::write(path, payload).await {
-        tracing::error!("failed to write resource file {resource:?}: {err}");
-        return Err(Error::PermissionDenied);
-    }
+    tokio::fs::rename(buf_path, path)
+        .await
+        .map_err(|_| Error::ResourceSaveFailed)?;
 
     worlds
         .resource
