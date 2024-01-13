@@ -206,3 +206,32 @@ async fn reset_password() {
     let account = lazy.get().await.unwrap();
     assert!(account.password_matches("NERD"));
 }
+
+#[tokio::test]
+async fn get_info() {
+    let (state, route) = router();
+    let mut account: Account = acc_exp!(DCK, ViewSimpleAccount);
+    let (token, _) = account.login("shanlilinghuo").unwrap();
+    let id = account.id();
+    state.worlds.account.insert(account).await.unwrap();
+
+    let res = req!(route, GET => format!("/account/get/{id}"), Auth { account: id, token: token.to_owned() });
+    assert!(res.status().is_success());
+    let info: crate::handle::account::Info = p_json!(res);
+    assert!(matches!(info, crate::handle::account::Info::Owned { .. }));
+
+    let mut another: Account = acc_exp!(MYG, ViewFullAccount, ViewSimpleAccount);
+    let (another_token, _) = another.login("123456").unwrap();
+    let another_id = another.id();
+    state.worlds.account.insert(another).await.unwrap();
+
+    let res = req!(route, GET => format!("/account/get/{another_id}"), Auth { account: id, token: token.to_owned() });
+    assert!(res.status().is_success());
+    let info: crate::handle::account::Info = p_json!(res);
+    assert!(matches!(info, crate::handle::account::Info::Simple { .. }));
+
+    let res = req!(route, GET => format!("/account/get/{id}"), Auth { account: another_id, token: another_token });
+    assert!(res.status().is_success());
+    let info: crate::handle::account::Info = p_json!(res);
+    assert!(matches!(info, crate::handle::account::Info::Full { .. }));
+}

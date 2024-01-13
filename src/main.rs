@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use axum::Router;
 use dmds::{IoHandle, World};
 use lettre::AsyncSmtpTransport;
 use sms4_backend::{account::Account, config::Config, resource, Error};
@@ -13,7 +14,7 @@ macro_rules! ipc {
 
 fn main() {}
 
-mod routes {
+pub mod routes {
     pub const SEND_CAPTCHA: &str = "/account/send-captcha";
     pub const REGISTER: &str = "/account/register";
     pub const LOGIN: &str = "/account/login";
@@ -118,6 +119,35 @@ impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
             token: token.to_owned(),
         })
     }
+}
+
+fn routing<Io: IoHandle + 'static>(mut router: Router<Global<Io>>) -> Router<Global<Io>> {
+    use axum::routing::{delete, get, patch, post, put};
+    use routes::*;
+
+    router
+        .route(SEND_CAPTCHA, post(handle::account::send_captcha))
+        .route(REGISTER, put(handle::account::register))
+        .route(LOGIN, post(handle::account::login))
+        .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
+        .route(
+            SEND_RESET_PASSWORD_CAPTCHA,
+            post(handle::account::send_reset_password_captcha),
+        )
+        .route(RESET_PASSWORD, patch(handle::account::reset_password))
+        .route(MODIFY_ACCOUNT, patch(handle::account::modify))
+        .route(LOGOUT, post(handle::account::logout))
+        .route(SET_PERMISSIONS, patch(handle::account::set_permissions))
+        .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
+        // post services
+        .route(NEW_POST, put(handle::post::new_post))
+        .route(FILTER_POSTS, get(handle::post::filter))
+        .route(GET_POST, get(handle::post::get_info))
+        .route(GET_POSTS, post(handle::post::bulk_get_info))
+        .route(MODIFY_POST, patch(handle::post::modify))
+        .route(REVIEW_POST, patch(handle::post::review))
+        .route(DELETE_POST, delete(handle::post::remove))
+        .route(BULK_DELETE_POST, delete(handle::post::bulk_remove))
 }
 
 #[cfg(test)]

@@ -1,9 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use axum::{
-    routing::{delete, patch, put},
-    Router,
-};
+use axum::Router;
 use dmds::{mem_io_handle::MemStorage, world};
 use sms4_backend::config::Config;
 use tokio::sync::Mutex;
@@ -12,9 +9,6 @@ use crate::Global;
 
 fn router() -> (Global<MemStorage>, Router) {
     sms4_backend::IS_TEST.store(true, std::sync::atomic::Ordering::Release);
-
-    use crate::{handle, routes::*};
-    use axum::routing::{get, post};
     use lettre::transport::smtp::authentication::Mechanism;
 
     let config = Config {
@@ -59,32 +53,7 @@ fn router() -> (Global<MemStorage>, Router) {
         resource_sessions: Arc::new(Mutex::new(sms4_backend::resource::UploadSessions::new())),
     };
 
-    let router: Router<()> = Router::new()
-        // account services
-        .route(SEND_CAPTCHA, post(handle::account::send_captcha))
-        .route(REGISTER, put(handle::account::register))
-        .route(LOGIN, post(handle::account::login))
-        .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
-        .route(
-            SEND_RESET_PASSWORD_CAPTCHA,
-            post(handle::account::send_reset_password_captcha),
-        )
-        .route(RESET_PASSWORD, patch(handle::account::reset_password))
-        .route(MODIFY_ACCOUNT, patch(handle::account::modify))
-        .route(LOGOUT, post(handle::account::logout))
-        .route(SET_PERMISSIONS, patch(handle::account::set_permissions))
-        .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
-        // post services
-        .route(NEW_POST, put(handle::post::new_post))
-        .route(FILTER_POSTS, get(handle::post::filter))
-        .route(GET_POST, get(handle::post::get_info))
-        .route(GET_POSTS, post(handle::post::bulk_get_info))
-        .route(MODIFY_POST, patch(handle::post::modify))
-        .route(REVIEW_POST, patch(handle::post::review))
-        .route(DELETE_POST, delete(handle::post::remove))
-        .route(BULK_DELETE_POST, delete(handle::post::bulk_remove))
-        // append state
-        .with_state(state.clone());
+    let router: Router<()> = crate::routing(Router::new()).with_state(state.clone());
     (state, router)
 }
 
@@ -162,6 +131,26 @@ macro_rules! acc_exp {
                 tags
             },
             "shanlilinghuo".to_owned(),
+            std::time::Duration::from_secs(60),
+            siphasher::sip::SipHasher24::new(),
+        )
+        .into()
+    };
+    (MYG, $($p:ident),*$(,)?) => {
+        libaccount::Account::new(
+            "myg@pkuschool.edu.cn".to_owned(),
+            "Genshine Owner".to_owned(),
+            "?".to_owned(),
+            Some(114514.into()),
+            Default::default(),
+            {
+                use sms4_backend::account::Tag;
+                let mut tags = libaccount::tag::Tags::new();
+                $(tags.insert(Tag::Permission(sms4_backend::account::Permission::$p));)*
+                tags.insert(Tag::Department("Party".to_owned()));
+                tags
+            },
+            "123456".to_owned(),
             std::time::Duration::from_secs(60),
             siphasher::sip::SipHasher24::new(),
         )

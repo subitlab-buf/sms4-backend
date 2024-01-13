@@ -317,7 +317,7 @@ pub async fn set_permissions<Io: IoHandle>(
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Info {
     Simple {
@@ -396,7 +396,7 @@ pub async fn get_info<Io: IoHandle>(
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<Info>, Error> {
     let select = sd!(worlds.account, auth.account);
-    let this_lazy = va!(auth, select => ViewSimpleAccount);
+    let this_lazy = va!(auth, select);
     let select = sd!(worlds.account, target);
     let lazy = gd!(select, target).ok_or(Error::AccountNotFound)?;
     let account = lazy.get().await?;
@@ -410,8 +410,15 @@ pub async fn get_info<Io: IoHandle>(
         .contains_permission(&Tag::Permission(Permission::ViewFullAccount))
     {
         Ok(Json(Info::from_full(account)))
-    } else {
+    } else if this_lazy
+        .get()
+        .await?
+        .tags()
+        .contains_permission(&Tag::Permission(Permission::ViewSimpleAccount))
+    {
         Ok(Json(Info::from_simple(account)))
+    } else {
+        Err(Error::PermissionDenied)
     }
 }
 
