@@ -1,6 +1,9 @@
 use std::{path::PathBuf, sync::Arc};
 
-use axum::Router;
+use axum::{
+    routing::{delete, patch, put},
+    Router,
+};
 use dmds::{mem_io_handle::MemStorage, world};
 use sms4_backend::config::Config;
 use tokio::sync::Mutex;
@@ -59,41 +62,45 @@ fn router() -> (Global<MemStorage>, Router) {
     let router: Router<()> = Router::new()
         // account services
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
-        .route(REGISTER, post(handle::account::register))
+        .route(REGISTER, put(handle::account::register))
         .route(LOGIN, post(handle::account::login))
         .route(GET_ACCOUNT_INFO, get(handle::account::get_info))
         .route(
             SEND_RESET_PASSWORD_CAPTCHA,
             post(handle::account::send_reset_password_captcha),
         )
-        .route(RESET_PASSWORD, post(handle::account::reset_password))
-        .route(MODIFY_ACCOUNT, post(handle::account::modify))
+        .route(RESET_PASSWORD, patch(handle::account::reset_password))
+        .route(MODIFY_ACCOUNT, patch(handle::account::modify))
         .route(LOGOUT, post(handle::account::logout))
-        .route(SET_PERMISSIONS, post(handle::account::set_permissions))
+        .route(SET_PERMISSIONS, patch(handle::account::set_permissions))
         .route(BULK_GET_ACCOUNT_INFO, post(handle::account::bulk_get_info))
         // post services
-        .route(NEW_POST, post(handle::post::new_post))
+        .route(NEW_POST, put(handle::post::new_post))
         .route(FILTER_POSTS, get(handle::post::filter))
         .route(GET_POST, get(handle::post::get_info))
         .route(GET_POSTS, post(handle::post::bulk_get_info))
-        .route(MODIFY_POST, post(handle::post::modify))
-        .route(REVIEW_POST, post(handle::post::review))
-        .route(DELETE_POST, post(handle::post::remove))
-        .route(BULK_DELETE_POST, post(handle::post::bulk_remove))
+        .route(MODIFY_POST, patch(handle::post::modify))
+        .route(REVIEW_POST, patch(handle::post::review))
+        .route(DELETE_POST, delete(handle::post::remove))
+        .route(BULK_DELETE_POST, delete(handle::post::bulk_remove))
         // append state
         .with_state(state.clone());
     (state, router)
 }
 
 macro_rules! req {
-    ($r:expr => $u:expr, $a:expr) => {{
-        let mut b = Some(Request::builder().uri($u).method(axum::http::Method::GET));
-        $a.append_to_req_builder(&mut $b);
-        let req = b.unwrap().body(Body::empty()).unwrap();
+    ($r:expr, $m:ident => $u:expr, $a:expr) => {{
+        let mut b = Some(
+            axum::http::Request::builder()
+                .uri($u)
+                .method(axum::http::Method::$m),
+        );
+        $a.append_to_req_builder(&mut b);
+        let req = b.unwrap().body(axum::body::Body::empty()).unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     }};
-    ($r:expr => $u:expr, $a:expr, $b:expr => json) => {
-        let mut b = Some(Request::builder().uri($u).method(axum::http::Method::POST));
+    ($r:expr, $m:ident => $u:expr, $a:expr, $b:expr => json) => {
+        let mut b = Some(Request::builder().uri($u).method(axum::http::Method::$m));
         $a.append_to_req_builder(&mut $b);
         let req = b
             .unwrap()
@@ -105,20 +112,20 @@ macro_rules! req {
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     };
-    ($r:expr => $u:expr, $a:expr, $b:expr => bytes) => {{
+    ($r:expr, $m:ident => $u:expr, $a:expr, $b:expr => bytes) => {{
         let mut b = Some(
             axum::http::Request::builder()
                 .uri($u)
-                .method(axum::http::Method::POST),
+                .method(axum::http::Method::$m),
         );
         $a.append_to_req_builder(&mut b);
         let req = b.unwrap().body(axum::body::Body::from($b)).unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     }};
-    ($r:expr => $u:expr, $b:expr => json) => {{
+    ($r:expr, $m:ident => $u:expr, $b:expr => json) => {{
         let req = axum::http::Request::builder()
             .uri($u)
-            .method(axum::http::Method::POST)
+            .method(axum::http::Method::$m)
             .header(
                 axum::http::header::CONTENT_TYPE,
                 mime::APPLICATION_JSON.as_ref(),
@@ -127,10 +134,10 @@ macro_rules! req {
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     }};
-    ($r:expr => $u:expr, $b:expr => bytes) => {{
+    ($r:expr, $m:ident => $u:expr, $b:expr => bytes) => {{
         let req = axum::http::Request::builder()
             .uri($u)
-            .method(axum::http::Method::POST)
+            .method(axum::http::Method::$m)
             .body(axum::body::Body::from($b))
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()

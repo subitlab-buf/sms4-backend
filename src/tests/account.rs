@@ -9,11 +9,11 @@ use crate::{gd, handle::account::LoginRes, routes::*, sd, tests::router, va, Aut
 #[tokio::test]
 async fn creation() {
     let (state, route) = router();
-    let res = req!(route => SEND_CAPTCHA,
+    let res = req!(route, POST => SEND_CAPTCHA,
         json!({ "email": "someone@beijing101.com" }) => json
     );
     assert!(!res.status().is_success());
-    let res = req!(route => SEND_CAPTCHA,
+    let res = req!(route, POST => SEND_CAPTCHA,
         json!({ "email": "kongdechen2025@i.pkuschool.edu.cn" }) => json
     );
     assert!(res.status().is_success());
@@ -28,7 +28,7 @@ async fn creation() {
 
     // Simulates a wrong captcha.
     let wrong_captcha = sms4_backend::account::verify::Captcha::from(captcha.into_inner() + 1);
-    let res = req!(route => REGISTER,
+    let res = req!(route, PUT => REGISTER,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "name": "Genshine Player",
@@ -40,7 +40,7 @@ async fn creation() {
     );
     assert!(!res.status().is_success());
 
-    let res = req!(route => REGISTER,
+    let res = req!(route, PUT => REGISTER,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "name": "Genshine Player",
@@ -103,7 +103,7 @@ async fn login() {
     state.worlds.account.insert(acc_exp!(DCK)).await.unwrap();
 
     // Login with wrong password
-    let res = req!(route => LOGIN,
+    let res = req!(route, POST => LOGIN,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "password": "123456",
@@ -112,7 +112,7 @@ async fn login() {
     assert!(!res.status().is_success());
 
     // Login successfully
-    let res = req!(route => LOGIN,
+    let res = req!(route, POST => LOGIN,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "password": "shanlilinghuo",
@@ -143,12 +143,12 @@ async fn logout() {
         account: id,
         token: token0,
     };
-    let wrong_res = req!(route => LOGOUT, auth_wrong, axum::body::Body::empty() => bytes);
+    let wrong_res = req!(route, POST => LOGOUT, auth_wrong);
     assert!(!wrong_res.status().is_success());
     let select = sd!(state.worlds.account, id);
     assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 
-    let res = req!(route => LOGOUT, auth, axum::body::Body::empty() => bytes);
+    let res = req!(route, POST => LOGOUT, auth);
     assert!(res.status().is_success());
     assert!(async { Ok(va!(auth, select)) }.await.is_err());
     let auth1 = Auth {
@@ -165,7 +165,7 @@ async fn reset_password() {
     let id = account.id();
     state.worlds.account.insert(account).await.unwrap();
 
-    let res = req!(route => SEND_RESET_PASSWORD_CAPTCHA,
+    let res = req!(route, POST => SEND_RESET_PASSWORD_CAPTCHA,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
         }) => json
@@ -178,7 +178,7 @@ async fn reset_password() {
         .await
         .expect("captcha not sent");
     let wrong_captcha = sms4_backend::account::verify::Captcha::from(captcha.into_inner() + 1);
-    let res = req!(route => RESET_PASSWORD,
+    let res = req!(route, PATCH => RESET_PASSWORD,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "captcha": wrong_captcha,
@@ -194,7 +194,7 @@ async fn reset_password() {
         assert!(account.password_matches("shanlilinghuo"));
     }
 
-    let res = req!(route => RESET_PASSWORD,
+    let res = req!(route, PATCH => RESET_PASSWORD,
         json!({
             "email": "kongdechen2025@i.pkuschool.edu.cn",
             "captcha": captcha,
