@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use dmds::StreamExt;
 use libaccount::Phone;
 use serde_json::json;
@@ -234,4 +236,47 @@ async fn get_info() {
     assert!(res.status().is_success());
     let info: crate::handle::account::Info = p_json!(res);
     assert!(matches!(info, crate::handle::account::Info::Full { .. }));
+
+    let res = req!(route, POST => BULK_GET_ACCOUNT_INFO, Auth { account: id, token: token.to_owned() },
+        json!({
+            "ids": [id, another_id],
+        }) => json
+    );
+    assert!(res.status().is_success());
+    let infos: HashMap<u64, crate::handle::account::Info> = p_json!(res);
+    assert_eq!(infos.len(), 2);
+}
+
+#[tokio::test]
+async fn modify() {
+    let (state, route) = router();
+    let mut account: Account = acc_exp!(DCK, ViewSimpleAccount);
+    let (token, _) = account.login("shanlilinghuo").unwrap();
+    let id = account.id();
+    state.worlds.account.insert(account).await.unwrap();
+
+    let res = req!(route, PATCH => MODIFY_ACCOUNT,
+        Auth { account: id, token: token.to_owned() },
+        json!({
+            "name": "Genshine Enjoyer",
+            "token_expire_duration": 3600,
+            "password": {
+                "old": "shanlilinghuo",
+                "new": "666666",
+            },
+            "departments": [
+                "Tianma",
+            ],
+        }) => json
+    );
+    assert!(res.status().is_success());
+    let select = sd!(state.worlds.account, id);
+    let lazy = gd!(select, id).unwrap();
+    let account = lazy.get().await.unwrap();
+    assert_eq!(account.name(), "Genshine Enjoyer");
+    assert!(account.password_matches("666666"));
+    assert_eq!(
+        account.tags().from_entry(&TagEntry::Department),
+        Some(&["Tianma"].map(|s| Tag::Department(s.to_owned())).into())
+    );
 }

@@ -68,9 +68,13 @@ macro_rules! req {
         let req = b.unwrap().body(axum::body::Body::empty()).unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
     }};
-    ($r:expr, $m:ident => $u:expr, $a:expr, $b:expr => json) => {
-        let mut b = Some(Request::builder().uri($u).method(axum::http::Method::$m));
-        $a.append_to_req_builder(&mut $b);
+    ($r:expr, $m:ident => $u:expr, $a:expr, $b:expr => json) => {{
+        let mut b = Some(
+            axum::http::Request::builder()
+                .uri($u)
+                .method(axum::http::Method::$m),
+        );
+        $a.append_to_req_builder(&mut b);
         let req = b
             .unwrap()
             .header(
@@ -80,7 +84,7 @@ macro_rules! req {
             .body(serde_json::to_string(&$b).unwrap())
             .unwrap();
         tower::ServiceExt::oneshot($r.clone(), req).await.unwrap()
-    };
+    }};
     ($r:expr, $m:ident => $u:expr, $a:expr, $b:expr => bytes) => {{
         let mut b = Some(
             axum::http::Request::builder()

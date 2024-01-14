@@ -424,7 +424,7 @@ pub async fn get_info<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
-    pub accounts: Vec<u64>,
+    pub ids: Vec<u64>,
 }
 
 /// Bulk gets account info, returns a map from account id to simple account info,
@@ -432,20 +432,20 @@ pub struct BulkGetInfoReq {
 pub async fn bulk_get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
-    Json(BulkGetInfoReq { accounts }): Json<BulkGetInfoReq>,
+    Json(BulkGetInfoReq { ids }): Json<BulkGetInfoReq>,
 ) -> Result<Json<HashMap<u64, Info>>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ViewSimpleAccount);
-    if let Some(last) = accounts.first().copied() {
+    if let Some(last) = ids.first().copied() {
         let mut select = worlds.account.select(0, last);
-        for account in &accounts[1..] {
+        for account in &ids[1..] {
             select = select.plus(0, *account);
         }
-        select = select.hints(accounts[..].into_iter().copied());
+        select = select.hints(ids[..].into_iter().copied());
         let mut iter = select.iter();
-        let mut res = HashMap::with_capacity(accounts.len());
+        let mut res = HashMap::with_capacity(ids.len());
         while let Some(Ok(lazy)) = iter.next().await {
-            if accounts.contains(&lazy.id()) {
+            if ids.contains(&lazy.id()) {
                 if let Ok(account) = lazy.get().await {
                     res.insert(account.id(), Info::from_simple(account));
                 }
