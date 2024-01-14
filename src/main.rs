@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::Router;
-use dmds::{IoHandle, World};
+use dmds::{world, IoHandle, World};
+use dmds_tokio_fs::FsHandle;
 use lettre::AsyncSmtpTransport;
 use sms4_backend::{account::Account, config::Config, resource, Error};
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 
 macro_rules! ipc {
     ($c:literal) => {
@@ -12,7 +13,62 @@ macro_rules! ipc {
     };
 }
 
-fn main() {}
+#[tokio::main]
+async fn main() {
+    let config: Config = {
+        const CFG_PATH: &'static str = "config.json";
+        let mut config_file = std::fs::File::open(CFG_PATH).expect("failed to open config file");
+        serde_json::from_reader(&mut config_file).expect("failed to parse config file")
+    };
+    macro_rules! dpath {
+        ($l:expr) => {{
+            let mut p = config.db_path.clone();
+            p.push($l);
+            p
+        }};
+    }
+    let state = Global {
+        smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
+        worlds: Arc::new(crate::Worlds {
+            account: Arc::new(world!(FsHandle::new(dpath!("accounts"),false),ipc!(16)=> ..)),
+            unverified_account: Arc::new(
+                world!(FsHandle::new(dpath!("unverified_accounts"),false),ipc!(4)=> ..),
+            ),
+            post: Arc::new(
+                world!(FsHandle::new(dpath!("posts"),false),ipc!(16)=> ..,368/4=> ..=367,ipc!(16)=> ..,1=> ..2),
+            ),
+            resource: Arc::new(
+                world!(FsHandle::new(dpath!("resources"),false),ipc!(256)=> ..,1=> ..2),
+            ),
+            notification: Arc::new(
+                world! {FsHandle::new(dpath!("notifications"),false),ipc!(32)=> ..,368/4=> ..=367},
+            ),
+        }),
+        config: Arc::new(config),
+        test_cx: Default::default(),
+        resource_sessions: Arc::new(Mutex::new(sms4_backend::resource::UploadSessions::new())),
+    };
+
+    macro_rules! daemon {
+        ($($i:ident => $s:expr),*$(,)?) => {
+            $(tokio::spawn(dmds_tokio_fs::daemon(state.worlds.$i.clone(), Duration::from_secs($s)));)*
+        };
+    }
+
+    daemon! {
+        account => 300,
+        unverified_account => 900,
+        post => 120,
+        resource => 60,
+        notification => 120,
+    }
+
+    let app: Router<()> = routing(axum::Router::new()).with_state(state);
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    axum::serve(TcpListener::bind(addr).await.unwrap(), app)
+        .await
+        .unwrap();
+}
 
 pub mod routes {
     pub const SEND_CAPTCHA: &str = "/account/send-captcha";
@@ -67,11 +123,11 @@ type NotificationWorld<Io> = World<sms4_backend::notification::Notification, 2, 
 
 #[derive(Debug)]
 pub struct Worlds<Io: IoHandle> {
-    account: AccountWorld<Io>,
-    unverified_account: UnverifiedAccountWorld<Io>,
-    post: PostWorld<Io>,
-    resource: ResourceWorld<Io>,
-    notification: NotificationWorld<Io>,
+    account: Arc<AccountWorld<Io>>,
+    unverified_account: Arc<UnverifiedAccountWorld<Io>>,
+    post: Arc<PostWorld<Io>>,
+    resource: Arc<ResourceWorld<Io>>,
+    notification: Arc<NotificationWorld<Io>>,
 }
 
 mod handle;

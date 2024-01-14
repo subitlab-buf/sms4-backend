@@ -28,25 +28,25 @@ fn router() -> (Global<MemStorage>, Router) {
     let state = Global {
         smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),
         worlds: Arc::new(crate::Worlds {
-            account: world!(MemStorage::new(), ipc!(16) => ..),
-            unverified_account: world!(MemStorage::new(), ipc!(4) => ..),
-            post: world!(
+            account: Arc::new(world!(MemStorage::new(), ipc!(16) => ..)),
+            unverified_account: Arc::new(world!(MemStorage::new(), ipc!(4) => ..)),
+            post: Arc::new(world!(
                 MemStorage::new(),
                 ipc!(16) => ..,
                 368 / 4 => ..=367,
                 ipc!(16) => ..,
                 1 => ..2
-            ),
-            resource: world!(
+            )),
+            resource: Arc::new(world!(
                 MemStorage::new(),
                 ipc!(256) => ..,
                 1 => ..2
-            ),
-            notification: world! {
+            )),
+            notification: Arc::new(world! {
                 MemStorage::new(),
                 ipc!(32) => ..,
                 368 / 4 => ..=367
-            },
+            }),
         }),
         config: Arc::new(config),
         test_cx: Default::default(),
