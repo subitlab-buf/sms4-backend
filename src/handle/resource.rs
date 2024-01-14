@@ -82,6 +82,7 @@ pub async fn new_session<Io: IoHandle>(
 }
 
 /// Response body for [`upload`].
+#[derive(Serialize)]
 pub struct UploadRes {
     /// Id of the resource.
     pub id: u64,

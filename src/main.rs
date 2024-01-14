@@ -90,6 +90,20 @@ pub mod routes {
     pub const REVIEW_POST: &str = "/post/review/:id";
     pub const DELETE_POST: &str = "/post/delete/:id";
     pub const BULK_DELETE_POST: &str = "/post/bulk-delete";
+
+    pub const NEW_UPLOAD_SESSION: &str = "/resource/new-session";
+    pub const UPLOAD_RESOURCE: &str = "/resource/upload/:id";
+    pub const GET_RESOURCE_PAYLOAD: &str = "/resource/payload/:id";
+    pub const GET_RESOURCE_INFO: &str = "/resource/get/:id";
+    pub const BULK_GET_RESOURCE_INFO: &str = "/resource/bulk-get";
+
+    pub const NOTIFY: &str = "/notification/new";
+    pub const FILTER_NOTIFICATIONS: &str = "/notification/filter";
+    pub const GET_NOTIFICATION: &str = "/notification/get/:id";
+    pub const BULK_GET_NOTIFICATION: &str = "/notification/bulk-get";
+    pub const DELETE_NOTIFICATION: &str = "/notification/delete/:id";
+    pub const BULK_DELETE_NOTIFICATION: &str = "/notification/bulk-delete";
+    pub const MODIFY_NOTIFICATION: &str = "/notification/modify/:id";
 }
 
 #[derive(Debug)]
@@ -177,11 +191,12 @@ impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
     }
 }
 
-fn routing<Io: IoHandle + 'static>(mut router: Router<Global<Io>>) -> Router<Global<Io>> {
+fn routing<Io: IoHandle + 'static>(router: Router<Global<Io>>) -> Router<Global<Io>> {
     use axum::routing::{delete, get, patch, post, put};
     use routes::*;
 
     router
+        // account serivces
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
         .route(REGISTER, put(handle::account::register))
         .route(LOGIN, post(handle::account::login))
@@ -204,6 +219,29 @@ fn routing<Io: IoHandle + 'static>(mut router: Router<Global<Io>>) -> Router<Glo
         .route(REVIEW_POST, patch(handle::post::review))
         .route(DELETE_POST, delete(handle::post::remove))
         .route(BULK_DELETE_POST, delete(handle::post::bulk_remove))
+        // resource services
+        .route(NEW_UPLOAD_SESSION, put(handle::resource::new_session))
+        .route(UPLOAD_RESOURCE, put(handle::resource::upload))
+        .route(GET_RESOURCE_PAYLOAD, get(handle::resource::get_payload))
+        .route(GET_RESOURCE_INFO, get(handle::resource::get_info))
+        .route(
+            BULK_GET_RESOURCE_INFO,
+            post(handle::resource::bulk_get_info),
+        )
+        // notification services
+        .route(NOTIFY, put(handle::notification::notify))
+        .route(FILTER_NOTIFICATIONS, get(handle::notification::filter))
+        .route(GET_NOTIFICATION, get(handle::notification::get_info))
+        .route(
+            BULK_GET_NOTIFICATION,
+            post(handle::notification::bulk_get_info),
+        )
+        .route(DELETE_NOTIFICATION, delete(handle::notification::remove))
+        .route(
+            BULK_DELETE_NOTIFICATION,
+            delete(handle::notification::bulk_remove),
+        )
+        .route(MODIFY_NOTIFICATION, patch(handle::notification::modify))
 }
 
 #[cfg(test)]

@@ -56,6 +56,7 @@ pub struct NotifyReq {
 ///     "id": 19,
 /// }
 /// ```
+#[derive(Serialize)]
 pub struct NotifyRes {
     /// Id of the notification.
     pub id: u64,
@@ -78,14 +79,14 @@ pub async fn notify<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(NotifyReq { title, body, time }): Json<NotifyReq>,
-) -> Result<NotifyRes, Error> {
+) -> Result<Json<NotifyRes>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ManageNotifications);
 
     let notification = Notification::new(title, body, time, auth.account);
     let id = notification.id();
     worlds.notification.insert(notification).await?;
-    Ok(NotifyRes { id })
+    Ok(Json(NotifyRes { id }))
 }
 
 /// Request URL query parameters  for filtering notifications.
@@ -243,6 +244,7 @@ pub async fn get_info<Io: IoHandle>(
     }))
 }
 
+#[derive(Deserialize)]
 pub struct BulkGetInfoReq {
     pub notifications: Box<[u64]>,
 }
