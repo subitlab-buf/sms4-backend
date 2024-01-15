@@ -196,7 +196,7 @@ fn routing<Io: IoHandle + 'static>(router: Router<Global<Io>>) -> Router<Global<
     use routes::*;
 
     router
-        // account serivces
+        // account services
         .route(SEND_CAPTCHA, post(handle::account::send_captcha))
         .route(REGISTER, put(handle::account::register))
         .route(LOGIN, post(handle::account::login))

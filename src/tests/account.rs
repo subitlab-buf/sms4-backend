@@ -122,9 +122,12 @@ async fn login() {
     );
     assert!(res.status().is_success());
     let LoginRes { id, token, .. } = p_json!(res);
-    let auth = Auth { account: id, token };
+    let auth = Auth {
+        account: id.0,
+        token,
+    };
 
-    let select = sd!(state.worlds.account, id);
+    let select = sd!(state.worlds.account, id.0);
     assert!(async { Ok(va!(auth, select)) }.await.is_ok());
 }
 

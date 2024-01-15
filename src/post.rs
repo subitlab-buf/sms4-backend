@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use time::{Date, Duration, OffsetDateTime};
 
-use crate::Error;
+use crate::{Error, Id};
 
 /// A post.
 ///
@@ -28,7 +28,7 @@ pub struct Post {
     time: RangeInclusive<Date>,
 
     /// List of resource ids this post used.
-    resources: Box<[u64]>,
+    resources: Box<[Id]>,
 
     /// Post states in time order.\
     /// There should be at least one state in a post.
@@ -66,7 +66,7 @@ impl Post {
         title: String,
         notes: String,
         time: RangeInclusive<time::Date>,
-        resources: Box<[u64]>,
+        resources: Box<[Id]>,
         account: u64,
         grouped: bool,
         priority: Priority,
@@ -135,11 +135,12 @@ impl Post {
 
     /// Creator of this post.
     #[inline]
-    pub fn creator(&self) -> u64 {
-        self.states
+    pub fn creator(&self) -> Id {
+        Id(self
+            .states
             .first()
             .expect("there should be at least one state in a post")
-            .operator
+            .operator)
     }
 
     #[inline]
@@ -163,12 +164,12 @@ impl Post {
 
     /// Gets the resources used by this post.
     #[inline]
-    pub fn resources(&self) -> &[u64] {
+    pub fn resources(&self) -> &[Id] {
         &self.resources
     }
 
     #[inline]
-    pub fn set_resources(&mut self, resources: Box<[u64]>) {
+    pub fn set_resources(&mut self, resources: Box<[Id]>) {
         self.resources = resources
     }
 
@@ -192,7 +193,7 @@ impl dmds::Data for Post {
         match dim {
             0 => self.id,
             1 => self.time.start().ordinal() as u64,
-            2 => self.creator(),
+            2 => self.creator().0,
             3 => self
                 .states
                 .last()

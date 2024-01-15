@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use sms4_backend::{
     account::{Permission, Tag},
     post::{Post, Priority, Status},
-    Error,
+    Error, Id,
 };
 use time::{Date, OffsetDateTime};
 
@@ -47,7 +47,7 @@ pub struct NewPostReq {
     /// Time range of the post.
     pub time: RangeInclusive<time::Date>,
     /// List of resource ids this post used.
-    pub resources: Box<[u64]>,
+    pub resources: Box<[Id]>,
     /// Whether this post should be played as
     /// a full sequence.
     pub grouped: bool,
@@ -67,7 +67,7 @@ pub struct NewPostReq {
 #[derive(Serialize)]
 pub struct NewPostRes {
     /// Id of the new post.
-    pub id: u64,
+    pub id: Id,
 }
 
 /// Creates a new post.
@@ -110,16 +110,16 @@ pub async fn new_post<Io: IoHandle>(
     let mut validated = 0;
     let mut select = worlds
         .resource
-        .select(0, *resources.first().ok_or(Error::PostResourceEmpty)?)
-        .hints(resources.iter().copied());
+        .select(0, resources.first().ok_or(Error::PostResourceEmpty)?.0)
+        .hints(resources.iter().copied().map(From::from));
     for id in resources.iter().copied() {
-        select = select.plus(0, id)
+        select = select.plus(0, id.0)
     }
     let mut iter = select.iter();
     while let Some(Ok(mut lazy)) = iter.next().await {
-        if resources.contains(&lazy.id()) {
+        if resources.contains(&Id(lazy.id())) {
             if let Ok(val) = lazy.get().await {
-                if val.owner() == auth.account {
+                if val.owner() == Id(auth.account) {
                     if let Ok(val) = lazy.get_mut().await {
                         val.block()?;
                         lazy.close().await?;
@@ -153,7 +153,7 @@ pub async fn new_post<Io: IoHandle>(
         .await
         .map_err(|_| Error::PermissionDenied)?;
 
-    Ok(Json(NewPostRes { id }))
+    Ok(Json(NewPostRes { id: id.into() }))
 }
 
 /// Request URL query parameters for filtering posts.
@@ -171,7 +171,7 @@ pub struct FilterPostsParams {
     /// Filter posts after this id.\
     /// The field can be omitted.
     #[serde(default)]
-    pub from: Option<u64>,
+    pub from: Option<Id>,
     /// Max posts to return.\
     /// The field can be omitted,
     /// and the default value is **64**.
@@ -181,7 +181,7 @@ pub struct FilterPostsParams {
     /// Filter posts creator.\
     /// The field can be omitted.
     #[serde(default)]
-    pub creator: Option<u64>,
+    pub creator: Option<Id>,
     /// Filter with post status.\
     /// The field can be omitted.
     #[serde(default)]
@@ -214,7 +214,7 @@ impl FilterPostsParams {
 #[derive(Serialize)]
 pub struct FilterPostsRes {
     /// List of post ids.
-    pub posts: Vec<u64>,
+    pub posts: Box<[Id]>,
 }
 
 /// Filters posts with given filter options.
@@ -253,10 +253,10 @@ pub async fn filter<Io: IoHandle>(
 
     let mut select = worlds.post.select_all();
     if let Some(from) = from {
-        select = select.and(0, from..);
+        select = select.and(0, from.0..);
     }
     if let Some(creator) = creator {
-        select = select.and(2, creator);
+        select = select.and(2, creator.0);
     }
     if let Some(status) = status {
         if matches!(status, sms4_backend::post::Status::Approved) {
@@ -278,7 +278,7 @@ pub async fn filter<Io: IoHandle>(
     let mut iter = select.iter();
     let mut posts = Vec::new();
     while let Some(Ok(lazy)) = iter.next().await {
-        if from.is_some_and(|a| lazy.id() <= a)
+        if from.is_some_and(|a| lazy.id() <= a.0)
             || screen.is_some_and(|s| lazy.id() % (s + 1) as u64 != 0)
         {
             continue;
@@ -287,7 +287,7 @@ pub async fn filter<Io: IoHandle>(
             if creator.is_some_and(|c| val.creator() != c)
                 || status.is_some_and(|s| val.state().status() != s)
                 || on.is_some_and(|d| !val.time().contains(&d))
-                || (val.creator() != auth.account
+                || (val.creator() != Id(auth.account)
                     && !if matches!(val.state().status(), sms4_backend::post::Status::Approved) {
                         permitted_get_pub
                     } else {
@@ -296,13 +296,15 @@ pub async fn filter<Io: IoHandle>(
             {
                 continue;
             }
-            posts.push(val.id());
+            posts.push(Id(val.id()));
             if posts.len() == limit {
                 break;
             }
         }
     }
-    Ok(Json(FilterPostsRes { posts }))
+    Ok(Json(FilterPostsRes {
+        posts: posts.into_boxed_slice(),
+    }))
 }
 
 /// Represents information of a post.
@@ -314,9 +316,9 @@ pub enum Info {
         /// Title of the post.
         title: String,
         /// Creator of this post.
-        creator: u64,
+        creator: Id,
         /// List of resource ids this post used.
-        resources: Box<[u64]>,
+        resources: Box<[Id]>,
         /// Whether this post should be played as
         /// a full sequence.
         grouped: bool,
@@ -362,7 +364,7 @@ impl Info {
 }
 
 pub async fn get_info<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(Id(id)): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<Info>, Error> {
@@ -383,7 +385,7 @@ pub async fn get_info<Io: IoHandle>(
     let lazy = gd!(select, id).ok_or(Error::PostNotFound(id))?;
     let val = lazy.get().await?;
 
-    if val.creator() == auth.account || permitted_review {
+    if val.creator() == Id(auth.account) || permitted_review {
         return Ok(Json(Info::from_full(&val)));
     } else if permitted_get_pub
         && matches!(val.state().status(), sms4_backend::post::Status::Approved)
@@ -397,7 +399,7 @@ pub async fn get_info<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
-    pub posts: Box<[u64]>,
+    pub posts: Box<[Id]>,
 }
 
 #[derive(Serialize)]
@@ -426,17 +428,20 @@ pub async fn bulk_get_info<Io: IoHandle>(
     let Some(first) = posts.get(0).copied() else {
         return Ok(Json(HashMap::new()));
     };
-    let mut select = worlds.post.select(0, first).hints(posts.iter().copied());
+    let mut select = worlds
+        .post
+        .select(0, first.0)
+        .hints(posts.iter().copied().map(From::from));
     for id in posts[1..].iter().copied() {
-        select = select.plus(0, id);
+        select = select.plus(0, id.0);
     }
     let mut iter = select.iter();
     let mut res = HashMap::with_capacity(posts.len().max(64));
     let now = OffsetDateTime::now_utc().date();
     while let Some(Ok(lazy)) = iter.next().await {
-        if posts.contains(&lazy.id()) {
+        if posts.contains(&Id(lazy.id())) {
             if let Ok(val) = lazy.get().await {
-                if val.creator() == auth.account || permitted_review {
+                if val.creator() == Id(auth.account) || permitted_review {
                     res.insert(val.id(), Info::from_full(val));
                 } else if permitted_get_pub
                     && matches!(val.state().status(), sms4_backend::post::Status::Approved)
@@ -465,25 +470,25 @@ pub struct ModifyReq {
     /// Overrides the linked post resources
     /// with given ones.
     #[serde(default)]
-    pub resources: Option<Box<[u64]>>,
+    pub resources: Option<Box<[Id]>>,
 
     #[serde(default)]
     pub grouped: Option<bool>,
 }
 
 pub async fn modify<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(id): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(mut req): Json<ModifyReq>,
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => Post);
-    let select = sd!(worlds.post, id);
-    let mut lazy = gd!(select, id).ok_or(Error::PostNotFound(id))?;
+    let select = sd!(worlds.post, id.0);
+    let mut lazy = gd!(select, id.0).ok_or(Error::PostNotFound(id.0))?;
     let post = lazy.get_mut().await?;
-    if post.creator() != auth.account {
-        return Err(Error::PostNotFound(id));
+    if post.creator() != Id(auth.account) {
+        return Err(Error::PostNotFound(id.0));
     }
 
     macro_rules! modify {
@@ -525,22 +530,22 @@ pub async fn modify<Io: IoHandle>(
                         .iter()
                         .copied()
                         .next()
-                        .unwrap_or_else(|| old_diff.iter().copied().next().unwrap()),
+                        .map_or_else(|| old_diff.iter().copied().next().unwrap().0, |i| i.0),
                 )
-                .hints(new_diff.iter().copied())
-                .hints(old_diff.iter().copied());
+                .hints(new_diff.iter().copied().map(From::from))
+                .hints(old_diff.iter().copied().map(From::from));
             for id in old_diff.iter().copied().chain(new_diff.iter().copied()) {
-                select = select.plus(0, id)
+                select = select.plus(0, id.0)
             }
             let mut iter = select.iter();
 
             while let Some(Ok(mut lazy)) = iter.next().await {
-                if old_diff.contains(&lazy.id()) {
+                if old_diff.contains(&Id(lazy.id())) {
                     lazy.destroy().await?;
-                } else if new_diff.contains(&lazy.id()) {
+                } else if new_diff.contains(&Id(lazy.id())) {
                     let res = lazy.get_mut().await?;
                     res.block()?;
-                    result.push(lazy.id());
+                    result.push(Id(lazy.id()));
                     lazy.close().await?;
                 } else {
                     continue;
@@ -567,7 +572,7 @@ pub struct ReviewReq {
 }
 
 pub async fn review<Io: IoHandle>(
-    Query(id): Query<u64>,
+    Path(id): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(ReviewReq { status, message }): Json<ReviewReq>,
@@ -577,8 +582,8 @@ pub async fn review<Io: IoHandle>(
     if !matches!(status, Status::Approved | Status::Rejected) {
         return Err(Error::InvalidPostStatus);
     }
-    let select = sd!(worlds.post, id);
-    let mut lazy = gd!(select, id).ok_or(Error::PostNotFound(id))?;
+    let select = sd!(worlds.post, id.0);
+    let mut lazy = gd!(select, id.0).ok_or(Error::PostNotFound(id.0))?;
     let post = lazy.get_mut().await?;
     post.pust_state(sms4_backend::post::State::new(
         status,
@@ -589,40 +594,40 @@ pub async fn review<Io: IoHandle>(
 }
 
 pub async fn remove<Io: IoHandle>(
-    Query(id): Query<u64>,
+    Path(id): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select => Post);
 
-    let select = sd!(worlds.post, id);
-    let lazy = gd!(select, id).ok_or(Error::PostNotFound(id))?;
+    let select = sd!(worlds.post, id.0);
+    let lazy = gd!(select, id.0).ok_or(Error::PostNotFound(id.0))?;
 
     let post = lazy.get().await?;
-    if post.creator() != auth.account
+    if post.creator() != Id(auth.account)
         && !this_lazy
             .get()
             .await?
             .tags()
             .contains_permission(&Tag::Permission(Permission::RemovePost))
     {
-        return Err(Error::PostNotFound(id));
+        return Err(Error::PostNotFound(id.0));
     }
 
     if let Some(first) = post.resources().first().copied() {
         let resources = post.resources();
         let mut select = worlds
             .resource
-            .select(0, first)
+            .select(0, first.0)
             .and(1, 1)
-            .hints(resources.iter().copied());
+            .hints(resources.iter().copied().map(From::from));
         for id in resources.iter().copied() {
-            select = select.plus(0, id)
+            select = select.plus(0, id.0)
         }
         let mut iter = select.iter();
         while let Some(Ok(lazy)) = iter.next().await {
-            if resources.contains(&lazy.id()) {
+            if resources.contains(&Id(lazy.id())) {
                 lazy.destroy().await?;
             }
         }
@@ -633,7 +638,7 @@ pub async fn remove<Io: IoHandle>(
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum BulkRemoveReq {
-    Posts { posts: Box<[u64]> },
+    Posts { posts: Box<[Id]> },
     Unused,
 }
 
@@ -656,16 +661,19 @@ pub async fn bulk_remove<Io: IoHandle>(
             let Some(first) = posts.get(0).copied() else {
                 return Ok(());
             };
-            let mut select = worlds.post.select(0, first).hints(posts.iter().copied());
+            let mut select = worlds
+                .post
+                .select(0, first.0)
+                .hints(posts.iter().copied().map(From::from));
             for id in posts[1..].iter().copied() {
-                select = select.plus(0, id);
+                select = select.plus(0, id.0);
             }
             let mut iter = select.iter();
 
             while let Some(Ok(lazy)) = iter.next().await {
-                if posts.contains(&lazy.id()) {
+                if posts.contains(&Id(lazy.id())) {
                     let post = lazy.get().await?;
-                    if post.creator() != auth.account && !permitted_rm {
+                    if post.creator() != Id(auth.account) && !permitted_rm {
                         continue;
                     }
                     resources_rm.extend_from_slice(post.resources());
@@ -700,15 +708,15 @@ pub async fn bulk_remove<Io: IoHandle>(
     if let Some(first) = resources_rm.first().copied() {
         let mut select = worlds
             .resource
-            .select(0, first)
+            .select(0, first.0)
             .and(1, 1)
-            .hints(resources_rm.iter().copied());
+            .hints(resources_rm.iter().copied().map(From::from));
         for id in resources_rm.iter().copied() {
-            select = select.plus(0, id)
+            select = select.plus(0, id.0)
         }
         let mut iter = select.iter();
         while let Some(Ok(lazy)) = iter.next().await {
-            if resources_rm.contains(&lazy.id()) {
+            if resources_rm.contains(&Id(lazy.id())) {
                 lazy.destroy().await?;
             }
         }

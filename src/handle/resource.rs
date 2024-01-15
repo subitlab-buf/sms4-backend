@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use sms4_backend::account::Permission;
 
-use sms4_backend::resource::{Resource, Variant};
+use sms4_backend::{
+    resource::{Resource, Variant},
+    Id,
+};
 use tokio::{fs::File, io::BufReader};
 
 use crate::{Auth, Error, Global};
@@ -47,7 +50,7 @@ pub struct NewSessionReq {
 pub struct NewSessionRes {
     /// Id of the upload session.\
     /// This is **not** id of the resource.
-    pub id: u64,
+    pub id: Id,
 }
 
 /// Creates a new upload session.
@@ -75,17 +78,17 @@ pub async fn new_session<Io: IoHandle>(
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => UploadResource);
 
-    let resource = Resource::new(variant, auth.account);
+    let resource = Resource::new(variant, Id(auth.account));
     let id = resource.id();
     resource_sessions.lock().await.insert(resource);
-    Ok(Json(NewSessionRes { id }))
+    Ok(Json(NewSessionRes { id: Id(id) }))
 }
 
 /// Response body for [`upload`].
 #[derive(Serialize)]
 pub struct UploadRes {
     /// Id of the resource.
-    pub id: u64,
+    pub id: Id,
 }
 
 /// Uploads a resource within the given session.
@@ -102,7 +105,7 @@ pub struct UploadRes {
 ///
 /// The response body is declared as [`UploadRes`].
 pub async fn upload<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(Id(id)): Path<Id>,
     auth: Auth,
     State(Global {
         worlds,
@@ -148,8 +151,8 @@ pub async fn upload<Io: IoHandle>(
     let resource = resource_sessions
         .lock()
         .await
-        .accept(id, hasher, auth.account)?;
-    let id = resource.id();
+        .accept(Id(id), hasher, Id(auth.account))?;
+    let id = Id(resource.id());
     let path = config.resource_path.join(resource.file_name());
     tokio::fs::rename(buf_path, path)
         .await
@@ -178,7 +181,7 @@ pub async fn upload<Io: IoHandle>(
 /// - [`Error::ResourceNotFound`] if the resource with the given id does not exist.
 /// - [`Error::PermissionDenied`] if the resource is not blocked **and** is not owned by the authorized account.
 pub async fn get_payload<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(Id(id)): Path<Id>,
     auth: Auth,
     State(Global { worlds, config, .. }): State<Global<Io>>,
 ) -> Result<Body, Error> {
@@ -187,7 +190,7 @@ pub async fn get_payload<Io: IoHandle>(
     let select = sd!(worlds.resource, id);
     let lazy = gd!(select, id).ok_or(Error::ResourceNotFound(id))?;
     let resource = lazy.get().await?;
-    if resource.owner() != auth.account && !resource.is_blocked() {
+    if resource.owner() != Id(auth.account) && !resource.is_blocked() {
         return Err(Error::PermissionDenied);
     }
 
@@ -206,7 +209,7 @@ pub struct Info {
 }
 
 pub async fn get_info<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(Id(id)): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<Info>, Error> {
@@ -215,7 +218,7 @@ pub async fn get_info<Io: IoHandle>(
     let select = sd!(worlds.resource, id).and(1, 1);
     let lazy = gd!(select, id).ok_or(Error::ResourceNotFound(id))?;
     let resource = lazy.get().await?;
-    if resource.owner() != auth.account && !resource.is_blocked() {
+    if resource.owner() != Id(auth.account) && !resource.is_blocked() {
         return Err(Error::PermissionDenied);
     }
     Ok(Json(Info {
@@ -227,7 +230,7 @@ pub async fn get_info<Io: IoHandle>(
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
     /// Ids of the resources.
-    pub ids: Box<[u64]>,
+    pub ids: Box<[Id]>,
 }
 
 pub async fn bulk_get_info<Io: IoHandle>(
@@ -239,15 +242,18 @@ pub async fn bulk_get_info<Io: IoHandle>(
     va!(auth, select => GetPubPost);
 
     let mut infos = HashMap::with_capacity(ids.len());
-    let mut select = worlds.resource.select(1, 1).hints(ids.iter().copied());
+    let mut select = worlds
+        .resource
+        .select(1, 1)
+        .hints(ids.iter().copied().map(From::from));
     for &id in &*ids {
-        select = select.and(0, id);
+        select = select.and(0, id.0);
     }
     let mut iter = select.iter();
     while let Some(Ok(lazy)) = iter.next().await {
-        if ids.contains(&lazy.id()) {
+        if ids.contains(&Id(lazy.id())) {
             if let Ok(resource) = lazy.get().await {
-                if resource.owner() != auth.account && !resource.is_blocked() {
+                if resource.owner() != Id(auth.account) && !resource.is_blocked() {
                     return Err(Error::PermissionDenied);
                 }
                 infos.insert(

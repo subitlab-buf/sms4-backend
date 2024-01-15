@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use time::Instant;
 
-use crate::Error;
+use crate::{Error, Id};
 
 /// Reference and metadata of a resource file.
 ///
@@ -22,7 +22,7 @@ pub struct Resource {
     #[serde(skip)]
     id: u64,
     variant: Variant,
-    owner: u64,
+    owner: Id,
 
     #[serde(skip)]
     used: bool,
@@ -33,7 +33,7 @@ impl Resource {
     ///
     /// The id will be generated randomly based on the
     /// time and account.
-    pub fn new(variant: Variant, account: u64) -> Self {
+    pub fn new(variant: Variant, account: Id) -> Self {
         let mut hasher = siphasher::sip::SipHasher24::new();
         SystemTime::now().hash(&mut hasher);
         account.hash(&mut hasher);
@@ -54,7 +54,7 @@ impl Resource {
     }
 
     #[inline]
-    pub fn owner(&self) -> u64 {
+    pub fn owner(&self) -> Id {
         self.owner
     }
 
@@ -207,21 +207,21 @@ impl UploadSessions {
     /// tell the new id to the frontend.
     pub fn accept<H: Hasher>(
         &mut self,
-        id: u64,
+        id: Id,
         mut hasher: H,
-        user: u64,
+        user: Id,
     ) -> Result<Resource, Error> {
         self.cleanup();
         let res = &self
             .inner
-            .get(&id)
-            .ok_or(Error::ResourceUploadSessionNotFound(id))?
+            .get(&id.0)
+            .ok_or(Error::ResourceUploadSessionNotFound(id.0))?
             .resource;
         if res.owner != user {
             return Err(Error::PermissionDenied);
         }
 
-        let mut res = self.inner.remove(&id).unwrap().resource;
+        let mut res = self.inner.remove(&id.0).unwrap().resource;
         SystemTime::now().hash(&mut hasher);
         user.hash(&mut hasher);
         res.id = hasher.finish();

@@ -18,7 +18,7 @@ use sms4_backend::{
         verify::{self, Captcha},
         Account, Permission, Tag, TagEntry, Unverified,
     },
-    Error,
+    Error, Id,
 };
 
 use crate::{Auth, Global};
@@ -107,7 +107,7 @@ pub struct LoginReq {
 
 #[derive(Serialize, Deserialize)]
 pub struct LoginRes {
-    pub id: u64,
+    pub id: Id,
     pub token: String,
     pub expire_at: Option<i64>,
 }
@@ -129,7 +129,7 @@ pub async fn login<Io: IoHandle>(
     })?;
 
     Ok(axum::Json(LoginRes {
-        id: lazy.id(),
+        id: lazy.id().into(),
         token,
         expire_at: exp_time,
     }))
@@ -180,7 +180,7 @@ pub async fn reset_password<Io: IoHandle>(
     let mut lazy = gd!(select, unverified.email_hash()).ok_or(Error::PermissionDenied)?;
     let account = lazy.get_mut().await?;
     account.reset_password(captcha, new_password)?;
-    // Clear all tokens after reseting password
+    // Clear all tokens after resetting password
     account.clear_tokens();
     Ok(())
 }
@@ -269,7 +269,7 @@ pub async fn logout<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct SetPermissionsReq {
-    pub target_account: u64,
+    pub target_account: Id,
     pub permissions: Vec<Permission>,
 }
 
@@ -294,8 +294,8 @@ pub async fn set_permissions<Io: IoHandle>(
         .filter_map(Tag::as_permission)
         .copied();
 
-    let select_t = sd!(worlds.account, target_account);
-    let mut lazy_t = gd!(select_t, target_account).ok_or(Error::AccountNotFound)?;
+    let select_t = sd!(worlds.account, target_account.0);
+    let mut lazy_t = gd!(select_t, target_account.0).ok_or(Error::AccountNotFound)?;
     let target = lazy_t.get_mut().await?;
     if this
         .tags()
@@ -391,14 +391,14 @@ impl Info {
 }
 
 pub async fn get_info<Io: IoHandle>(
-    Path(target): Path<u64>,
+    Path(target): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<Info>, Error> {
     let select = sd!(worlds.account, auth.account);
     let this_lazy = va!(auth, select);
-    let select = sd!(worlds.account, target);
-    let lazy = gd!(select, target).ok_or(Error::AccountNotFound)?;
+    let select = sd!(worlds.account, target.0);
+    let lazy = gd!(select, target.0).ok_or(Error::AccountNotFound)?;
     let account = lazy.get().await?;
 
     if auth.account == account.id() {
@@ -424,7 +424,7 @@ pub async fn get_info<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
-    pub ids: Vec<u64>,
+    pub ids: Vec<Id>,
 }
 
 /// Bulk gets account info, returns a map from account id to simple account info,
@@ -433,21 +433,21 @@ pub async fn bulk_get_info<Io: IoHandle>(
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(BulkGetInfoReq { ids }): Json<BulkGetInfoReq>,
-) -> Result<Json<HashMap<u64, Info>>, Error> {
+) -> Result<Json<HashMap<Id, Info>>, Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ViewSimpleAccount);
-    if let Some(last) = ids.first().copied() {
-        let mut select = worlds.account.select(0, last);
+    if let Some(first) = ids.first().copied() {
+        let mut select = worlds.account.select(0, first.0);
         for account in &ids[1..] {
-            select = select.plus(0, *account);
+            select = select.plus(0, account.0);
         }
-        select = select.hints(ids[..].into_iter().copied());
+        select = select.hints(ids.iter().copied().map(From::from));
         let mut iter = select.iter();
         let mut res = HashMap::with_capacity(ids.len());
         while let Some(Ok(lazy)) = iter.next().await {
-            if ids.contains(&lazy.id()) {
+            if ids.contains(&Id(lazy.id())) {
                 if let Ok(account) = lazy.get().await {
-                    res.insert(account.id(), Info::from_simple(account));
+                    res.insert(account.id().into(), Info::from_simple(account));
                 }
             }
         }

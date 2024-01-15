@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use account::verify::VerifyVariant;
 use axum::{http::StatusCode, response::IntoResponse};
 use lettre::transport::smtp;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use time::Duration;
 
 pub mod config;
@@ -151,4 +151,65 @@ impl_from! {
     smtp::Error => Smtp,
     axum::http::header::ToStrError => HeaderNonAscii,
     dmds::Error => Database,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Id(pub u64);
+
+impl Serialize for Id {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Id {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr<'a> {
+            Num(u64),
+            Str(&'a str),
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Num(n) => Ok(Self(n)),
+            Repr::Str(s) => s.parse().map_err(|_| {
+                serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Str(s),
+                    &"number as a string",
+                )
+            }),
+        }
+    }
+}
+
+impl std::str::FromStr for Id {
+    type Err = std::num::ParseIntError;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse().map(Self)
+    }
+}
+
+impl From<u64> for Id {
+    #[inline]
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Id> for u64 {
+    #[inline]
+    fn from(value: Id) -> Self {
+        value.0
+    }
 }

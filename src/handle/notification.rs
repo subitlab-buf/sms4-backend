@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sms4_backend::{
     account::{Permission, Tag},
     notification::Notification,
+    Id,
 };
 use time::{Date, Duration, OffsetDateTime};
 
@@ -59,7 +60,7 @@ pub struct NotifyReq {
 #[derive(Serialize)]
 pub struct NotifyRes {
     /// Id of the notification.
-    pub id: u64,
+    pub id: Id,
 }
 
 /// Creates a new notification.
@@ -84,7 +85,7 @@ pub async fn notify<Io: IoHandle>(
     va!(auth, select => ManageNotifications);
 
     let notification = Notification::new(title, body, time, auth.account);
-    let id = notification.id();
+    let id = Id(notification.id());
     worlds.notification.insert(notification).await?;
     Ok(Json(NotifyRes { id }))
 }
@@ -104,7 +105,7 @@ pub struct FilterNotificationParams {
     /// Filter notifications after this id.\
     /// The field can be omitted.
     #[serde(default)]
-    pub from: Option<u64>,
+    pub from: Option<Id>,
     /// Max notifications to return.\
     /// The field can be omitted,
     /// and the default value is **16**.
@@ -116,7 +117,7 @@ pub struct FilterNotificationParams {
     ///
     /// This only works with the permission [`Permission::ManageNotifications`].
     #[serde(default)]
-    pub sender: Option<u64>,
+    pub sender: Option<Id>,
 }
 
 impl FilterNotificationParams {
@@ -127,7 +128,7 @@ impl FilterNotificationParams {
 #[derive(Serialize)]
 pub struct FilterNotificationRes {
     /// Notifications ids.
-    pub notifications: Vec<u64>,
+    pub notifications: Box<[Id]>,
 }
 
 /// Filters notifications.
@@ -152,7 +153,7 @@ pub async fn filter<Io: IoHandle>(
 
     let mut select = worlds.notification.select_all();
     if let Some(from) = from {
-        select = select.and(0, from..);
+        select = select.and(0, from.0..);
     }
     if let Some((before, after)) = after.zip(before) {
         if after + Duration::days(365) > before {
@@ -170,24 +171,26 @@ pub async fn filter<Io: IoHandle>(
     let mut notifications = Vec::new();
     let now = OffsetDateTime::now_utc();
     while let Some(Ok(lazy)) = iter.next().await {
-        if from.is_some_and(|a| lazy.id() <= a) {
+        if from.is_some_and(|a| lazy.id() <= a.0) {
             continue;
         }
         if let Ok(val) = lazy.get().await {
-            if sender.is_some_and(|c| val.sender() != c && permitted_manage)
+            if sender.is_some_and(|c| Id(val.sender()) != c && permitted_manage)
                 || after.is_some_and(|d| val.time().date() >= d)
                 || before.is_some_and(|d| val.time().date() <= d)
                 || (!permitted_manage && val.time() > now)
             {
                 continue;
             }
-            notifications.push(val.id());
+            notifications.push(Id(val.id()));
             if notifications.len() == limit {
                 break;
             }
         }
     }
-    Ok(Json(FilterNotificationRes { notifications }))
+    Ok(Json(FilterNotificationRes {
+        notifications: notifications.into_boxed_slice(),
+    }))
 }
 
 #[derive(Serialize)]
@@ -220,7 +223,7 @@ impl Info {
 
 /// Gets a notification.
 pub async fn get_info<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(Id(id)): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<Json<Info>, Error> {
@@ -246,7 +249,7 @@ pub async fn get_info<Io: IoHandle>(
 
 #[derive(Deserialize)]
 pub struct BulkGetInfoReq {
-    pub notifications: Box<[u64]>,
+    pub notifications: Box<[Id]>,
 }
 
 pub async fn bulk_get_info<Io: IoHandle>(
@@ -267,16 +270,16 @@ pub async fn bulk_get_info<Io: IoHandle>(
     };
     let mut select = worlds
         .notification
-        .select(0, first)
-        .hints(notifications.iter().copied());
+        .select(0, first.0)
+        .hints(notifications.iter().copied().map(From::from));
     for id in notifications[1..].iter().copied() {
-        select = select.plus(0, id);
+        select = select.plus(0, id.0);
     }
     let mut iter = select.iter();
     let mut res = HashMap::with_capacity(notifications.len().max(64));
     let now = OffsetDateTime::now_utc();
     while let Some(Ok(lazy)) = iter.next().await {
-        if notifications.contains(&lazy.id()) {
+        if notifications.contains(&Id(lazy.id())) {
             if let Ok(val) = lazy.get().await {
                 if val.time() <= now && !permitted_manage {
                     continue;
@@ -298,16 +301,16 @@ pub async fn bulk_get_info<Io: IoHandle>(
 ///
 /// The request must be authorized with [`Permission::ManageNotifications`].
 pub async fn remove<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(id): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ManageNotifications);
 
-    let select = sd!(worlds.notification, id);
-    gd!(select, id)
-        .ok_or(Error::NotificationNotFound(id))?
+    let select = sd!(worlds.notification, id.0);
+    gd!(select, id.0)
+        .ok_or(Error::NotificationNotFound(id.0))?
         .destroy()
         .await?;
 
@@ -317,7 +320,7 @@ pub async fn remove<Io: IoHandle>(
 /// Request body for bulk removing notifications.
 #[derive(Deserialize)]
 pub struct BulkRemoveReq {
-    pub notifications: Box<[u64]>,
+    pub notifications: Box<[Id]>,
 }
 
 /// Bulk removes notifications.
@@ -340,15 +343,15 @@ pub async fn bulk_remove<Io: IoHandle>(
     if let Some(first) = notifications.first().copied() {
         let mut select = worlds
             .notification
-            .select(0, first)
-            .hints(notifications.iter().copied());
+            .select(0, first.0)
+            .hints(notifications.iter().copied().map(From::from));
         for id in notifications[1..].iter().copied() {
-            select = select.plus(0, id);
+            select = select.plus(0, id.0);
         }
 
         let mut iter = select.iter();
         while let Some(Ok(lazy)) = iter.next().await {
-            if notifications.contains(&lazy.id()) {
+            if notifications.contains(&Id(lazy.id())) {
                 lazy.destroy().await?;
             }
         }
@@ -377,15 +380,15 @@ pub struct ModifyReq {
 ///
 /// The request body is declared as [`ModifyReq`].
 pub async fn modify<Io: IoHandle>(
-    Path(id): Path<u64>,
+    Path(id): Path<Id>,
     auth: Auth,
     State(Global { worlds, .. }): State<Global<Io>>,
     Json(ModifyReq { title, body, time }): Json<ModifyReq>,
 ) -> Result<(), Error> {
     let select = sd!(worlds.account, auth.account);
     va!(auth, select => ManageNotifications);
-    let select = sd!(worlds.notification, id);
-    let mut lazy = gd!(select, id).ok_or(Error::NotificationNotFound(id))?;
+    let select = sd!(worlds.notification, id.0);
+    let mut lazy = gd!(select, id.0).ok_or(Error::NotificationNotFound(id.0))?;
     let val = lazy.get_mut().await?;
 
     if let Some(title) = title {
