@@ -325,6 +325,7 @@ pub enum Info {
         /// Priority of the post.
         priority: Priority,
     },
+
     /// Full information of a post.
     ///
     /// This variant is only available for
