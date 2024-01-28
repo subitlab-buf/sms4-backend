@@ -155,7 +155,7 @@ pub async fn filter<Io: IoHandle>(
     if let Some(from) = from {
         select = select.and(0, from.0..);
     }
-    if let Some((before, after)) = after.zip(before) {
+    if let (Some(before), Some(after)) = (before, after) {
         if after + Duration::days(365) > before {
             if after.year() == before.year() {
                 select = select.and(1, after.ordinal() as u64..=before.ordinal() as u64);
