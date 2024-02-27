@@ -130,17 +130,30 @@ pub async fn upload<Io: IoHandle>(
         .await
         .map_err(|_| Error::ResourceSaveFailed)?;
     let mut stream = http_body_util::BodyStream::new(payload);
+
+    const MAX_PAYLOAD_LEN: usize = 50 * 1024 * 1024;
+
+    let mut len = 0_usize;
     while let Some(chunk) = stream
         .try_next()
         .await
         .map_err(|_| Error::ResourceSaveFailed)?
     {
         let chunk = chunk.into_data().map_err(|_| Error::ResourceSaveFailed)?;
+        len += chunk.len();
         highway::HighwayHash::append(&mut hasher, &chunk);
         tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
             .await
             .map_err(|_| Error::ResourceSaveFailed)?;
     }
+    if len > MAX_PAYLOAD_LEN {
+        drop(file);
+        let _ = tokio::fs::remove_file(buf_path).await;
+        return Err(Error::PayloadTooLarge {
+            max: MAX_PAYLOAD_LEN,
+        });
+    }
+
     tokio::io::AsyncWriteExt::flush(&mut file)
         .await
         .map_err(|_| Error::ResourceSaveFailed)?;
@@ -222,7 +235,7 @@ pub async fn get_info<Io: IoHandle>(
         return Err(Error::PermissionDenied);
     }
     Ok(Json(Info {
-        variant: resource.variant().clone(),
+        variant: resource.variant(),
     }))
 }
 
@@ -259,7 +272,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
                 infos.insert(
                     resource.id(),
                     Info {
-                        variant: resource.variant().clone(),
+                        variant: resource.variant(),
                     },
                 );
             }

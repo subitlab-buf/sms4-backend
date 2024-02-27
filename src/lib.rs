@@ -79,6 +79,8 @@ pub enum Error {
     ResourceSaveFailed,
     #[error("resource {0} not found")]
     ResourceNotFound(u64),
+    #[error("payload too large: max {max} bytes")]
+    PayloadTooLarge { max: usize },
 
     #[error("notification {0} not found")]
     NotificationNotFound(u64),

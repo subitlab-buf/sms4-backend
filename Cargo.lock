@@ -711,7 +711,7 @@ dependencies = [
 [[package]]
 name = "libaccount"
 version = "0.1.0"
-source = "git+https://github.com/subitlab-buf/libaccount.git?branch=tags#839f915ad62f6d3af714bc23b5678c418655ef11"
+source = "git+https://github.com/subitlab-buf/libaccount.git#643bfdf3da17816dcf4632e55aeb42face32e888"
 dependencies = [
  "rand",
  "serde",
