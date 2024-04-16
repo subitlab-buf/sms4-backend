@@ -18,6 +18,9 @@ pub struct Config {
 
     /// The root path of resource files.
     pub resource_path: PathBuf,
+
+    /// Numbers of public screens.
+    pub screens: usize,
 }
 
 /// SMTP mailing configuration.

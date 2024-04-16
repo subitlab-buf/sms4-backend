@@ -24,6 +24,7 @@ fn router() -> (Global<MemStorage>, Router) {
         db_path: Default::default(),
         port: 8080,
         resource_path: PathBuf::from(".test/resources"),
+        screens: 2,
     };
     let state = Global {
         smtp_transport: Arc::new(config.smtp.to_transport().unwrap()),

@@ -236,7 +236,7 @@ pub async fn filter<Io: IoHandle>(
         screen,
     }): Query<FilterPostsParams>,
     auth: Auth,
-    State(Global { worlds, .. }): State<Global<Io>>,
+    State(Global { worlds, config, .. }): State<Global<Io>>,
 ) -> Result<Json<FilterPostsRes>, Error> {
     let select = sd!(worlds.account, auth.account);
     let lazy_this = va!(auth, select);
@@ -279,7 +279,7 @@ pub async fn filter<Io: IoHandle>(
     let mut posts = Vec::new();
     while let Some(Ok(lazy)) = iter.next().await {
         if from.is_some_and(|a| lazy.id() <= a.0)
-            || screen.is_some_and(|s| lazy.id() % (s + 1) as u64 != 0)
+            || screen.is_some_and(|s| lazy.id() % config.screens as u64 != s as u64)
         {
             continue;
         }
