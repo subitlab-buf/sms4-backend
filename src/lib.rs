@@ -1,4 +1,4 @@
-//! The 4th generation of SubIT Screen Management System Backend written in Rust.
+//! The 4th generation of SubIT Screen Management System Backend.
 
 #![warn(missing_docs, clippy::missing_docs_in_private_items)]
 
