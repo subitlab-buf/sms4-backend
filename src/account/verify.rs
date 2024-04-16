@@ -1,3 +1,5 @@
+//! Account verification.
+
 use std::{collections::HashMap, fmt::Display};
 
 use lettre::{transport::smtp, AsyncSmtpTransport};
@@ -53,7 +55,9 @@ impl VerifyCx {
     /// - Errors if the difference between the last request time
     /// and the current time is no more than 10 minuts.
     pub(super) fn update(&mut self) -> Result<Captcha, Error> {
+        /// The least duration between two requests.
         const LEAST_DURATION: time::Duration = time::Duration::minutes(10);
+
         let now = OffsetDateTime::now_utc();
         let delta = now - self.last_req;
         if delta >= LEAST_DURATION {
@@ -84,6 +88,7 @@ impl VerifyCx {
         E: lettre::Executor,
         AsyncSmtpTransport<E>: lettre::AsyncTransport<Error = smtp::Error>,
     {
+        /// The sender name.
         const SENDER: &str = "SubIT";
         let captcha = self.update()?;
 
@@ -113,6 +118,7 @@ impl VerifyCx {
         Ok(())
     }
 
+    /// Gets the captcha.
     #[inline]
     pub(crate) fn captcha(&self) -> Captcha {
         self.captcha
@@ -131,14 +137,16 @@ impl Default for VerifyCx {
 pub struct Captcha(u32);
 
 impl Captcha {
-    const DIGITS: usize = 6;
+    /// The number of digits of a captcha.
+    const DIGITS: u32 = 6;
 
     /// Creates a new captcha randomly.
     fn new() -> Self {
         let mut rng = rand::thread_rng();
-        Self(rng.gen_range(0..1000000))
+        Self(rng.gen_range(0..10u32.pow(Self::DIGITS)))
     }
 
+    /// Converts this captcha into the inner value.
     #[inline]
     pub fn into_inner(self) -> u32 {
         self.0
@@ -155,7 +163,7 @@ impl Default for Captcha {
 impl Display for Captcha {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let num = self.0.to_string();
-        for _ in num.len()..Self::DIGITS {
+        for _ in num.len()..Self::DIGITS as usize {
             '0'.fmt(f)?;
         }
         num.fmt(f)
@@ -176,8 +184,12 @@ impl From<Captcha> for u32 {
     }
 }
 
+/// Extra arguments for verifying an account.
+///
+/// See [`libaccount::ExtVerify`].
 #[derive(Serialize, Deserialize)]
 pub struct DescArgs {
+    /// The captcha.
     captcha: Captcha,
 }
 

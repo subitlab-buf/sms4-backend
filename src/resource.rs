@@ -1,3 +1,5 @@
+//! Resource management.
+
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
@@ -5,7 +7,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use time::Instant;
+use std::time::Instant;
 
 use crate::{Error, Id};
 
@@ -19,11 +21,15 @@ use crate::{Error, Id};
 /// ```
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Resource {
+    /// Id of this resource.
     #[serde(skip)]
     id: u64,
+    /// Variant of this resource.
     variant: Variant,
+    /// Owner of this resource.
     owner: Id,
 
+    /// Whether this resource is currently used.
     #[serde(skip)]
     used: bool,
 }
@@ -53,6 +59,7 @@ impl Resource {
         self.id
     }
 
+    /// Owner of this resource.
     #[inline]
     pub fn owner(&self) -> Id {
         self.owner
@@ -60,8 +67,8 @@ impl Resource {
 
     /// Variant of this resource.
     #[inline]
-    pub fn variant(&self) -> Variant {
-        self.variant
+    pub fn variant(&self) -> &Variant {
+        &self.variant
     }
 
     /// Marks this resource as used.
@@ -87,6 +94,7 @@ impl Resource {
         self.used
     }
 
+    /// File prefix of a resource.
     const FILE_PREFIX: &'static str = "r_";
 
     /// File name of this resource.
@@ -94,6 +102,7 @@ impl Resource {
         format!("{}{}", Self::FILE_PREFIX, self.id)
     }
 
+    /// Buffer prefix of a resource.
     const BUF_PREFIX: &'static str = "buf_";
 
     /// Buffer file name of this resource.
@@ -138,7 +147,9 @@ impl dmds::Data for Resource {
 /// A resource uploading session.
 #[derive(Debug)]
 struct UploadSession {
+    /// Resource being uploaded.
     resource: Resource,
+    /// Time of creation.
     instant: Instant,
 }
 
@@ -184,11 +195,13 @@ pub struct UploadSessions {
 }
 
 impl UploadSessions {
+    /// Creates a new storage.
     #[inline]
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Cleans up expired sessions.
     #[inline]
     fn cleanup(&mut self) {
         self.inner.retain(|_, v| !v.is_expired());
@@ -236,14 +249,26 @@ impl UploadSessions {
 }
 
 /// Type of a [`Resource`].
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum Variant {
-    Image,
+    /// An image.
+    Image {
+        /// Duration this image is displayed, as seconds.
+        ///
+        /// At frontend, this should only be available as selectable items.
+        duration: u32,
+    },
+    /// A PDF file.
     Pdf {
         /// Number of pages.
         pages: u16,
+        /// Durations of each page, as seconds.
+        ///
+        /// The length of this array should be equal to `pages`.
+        durations: Box<[u32]>,
     },
+    /// A video file.
     Video {
         /// Video duration, as seconds.
         duration: u32,

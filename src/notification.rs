@@ -1,3 +1,5 @@
+//! Notification sent by admins, and displayed by the screens.
+
 use std::{
     hash::{Hash, Hasher},
     time::SystemTime,
@@ -6,8 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-/// Notification sent by admins, and displayed
-/// by the screens.
+/// Notification sent by admins, and displayed by the screens.
 ///
 /// # dmds Dimensions
 ///

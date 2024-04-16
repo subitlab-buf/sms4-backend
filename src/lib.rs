@@ -1,3 +1,7 @@
+//! The 4th generation of SubIT Screen Management System Backend written in Rust.
+
+#![warn(missing_docs, clippy::missing_docs_in_private_items)]
+
 use std::sync::atomic::AtomicBool;
 
 use account::verify::VerifyVariant;
@@ -14,15 +18,20 @@ pub mod post;
 
 pub mod resource;
 
+/// Global test flag.
 pub static IS_TEST: AtomicBool = AtomicBool::new(false);
 
+/// The test context for testing.
 #[derive(Debug, Default)]
 pub struct TestCx {
+    /// The captcha for testing.
     pub captcha: tokio::sync::Mutex<Option<account::verify::Captcha>>,
 }
 
+/// Error type.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("account error: {0}")]
     LibAccount(libaccount::Error),
@@ -93,6 +102,7 @@ pub enum Error {
 }
 
 impl Error {
+    /// Converts the error to a status code.
     pub fn to_status_code(&self) -> StatusCode {
         match self {
             Error::VerifySessionNotFound(_)
@@ -118,8 +128,10 @@ impl Error {
 impl IntoResponse for Error {
     #[inline]
     fn into_response(self) -> axum::response::Response {
+        /// Error info struct.
         #[derive(Serialize)]
         struct ErrorInfo {
+            /// Error message.
             error: String,
         }
         (
@@ -155,7 +167,9 @@ impl_from! {
     dmds::Error => Database,
 }
 
+/// Id type.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[repr(transparent)]
 pub struct Id(pub u64);
 
 impl Serialize for Id {
@@ -174,10 +188,13 @@ impl<'de> Deserialize<'de> for Id {
     where
         D: serde::Deserializer<'de>,
     {
+        /// Deserialization representation.
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum Repr<'a> {
+            /// Number representation.
             Num(u64),
+            /// String slice representation.
             Str(&'a str),
         }
 

@@ -235,7 +235,7 @@ pub async fn get_info<Io: IoHandle>(
         return Err(Error::PermissionDenied);
     }
     Ok(Json(Info {
-        variant: resource.variant(),
+        variant: resource.variant().clone(),
     }))
 }
 
@@ -272,7 +272,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
                 infos.insert(
                     resource.id(),
                     Info {
-                        variant: resource.variant(),
+                        variant: resource.variant().clone(),
                     },
                 );
             }

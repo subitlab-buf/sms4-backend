@@ -387,12 +387,12 @@ pub async fn get_info<Io: IoHandle>(
     let val = lazy.get().await?;
 
     if val.creator() == Id(auth.account) || permitted_review {
-        return Ok(Json(Info::from_full(&val)));
+        Ok(Json(Info::from_full(val)))
     } else if permitted_get_pub
         && matches!(val.state().status(), sms4_backend::post::Status::Approved)
         && val.time().contains(&now)
     {
-        return Ok(Json(Info::from_simple(val)));
+        Ok(Json(Info::from_simple(val)))
     } else {
         Err(Error::PostNotFound(id))
     }
@@ -426,7 +426,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
         .tags()
         .contains_permission(&Tag::Permission(Permission::GetPubPost));
 
-    let Some(first) = posts.get(0).copied() else {
+    let Some(first) = posts.first().copied() else {
         return Ok(Json(HashMap::new()));
     };
     let mut select = worlds
@@ -505,13 +505,9 @@ pub async fn modify<Io: IoHandle>(
     if let Some(new_res) = req
         .resources
         .take()
-        .map(|s| s.into_iter().copied().collect::<HashSet<_>>())
+        .map(|s| s.iter().copied().collect::<HashSet<_>>())
     {
-        let old_res = post
-            .resources()
-            .into_iter()
-            .copied()
-            .collect::<HashSet<_>>();
+        let old_res = post.resources().iter().copied().collect::<HashSet<_>>();
         let new_diff = new_res
             .difference(&old_res)
             .copied()
@@ -659,7 +655,7 @@ pub async fn bulk_remove<Io: IoHandle>(
 
     match req {
         BulkRemoveReq::Posts { posts } => {
-            let Some(first) = posts.get(0).copied() else {
+            let Some(first) = posts.first().copied() else {
                 return Ok(());
             };
             let mut select = worlds

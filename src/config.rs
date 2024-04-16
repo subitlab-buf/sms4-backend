@@ -1,8 +1,11 @@
+//! The configuration of the server.
+
 use std::path::PathBuf;
 
 use lettre::{transport::smtp, AsyncSmtpTransport};
 use serde::{Deserialize, Serialize};
 
+/// The configuration of the server.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// SMTP configuration.
@@ -25,13 +28,16 @@ pub struct SMTP {
     /// The SMTP Server port.
     #[serde(default)]
     pub port: Option<u16>,
+    /// The encryption type of target SMTP server.
     #[serde(default)]
     pub encrypt: SmtpEncryption,
 
     /// The email address.
     pub address: lettre::Address,
 
+    /// The username.
     pub username: String,
+    /// The password.
     pub password: String,
 
     /// The auth mechanism.
@@ -43,8 +49,10 @@ pub struct SMTP {
 /// The encryption type of target SMTP server.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub enum SmtpEncryption {
+    /// Use TLS.
     #[default]
     Tls,
+    /// Use STARTTLS.
     StartTls,
 }
 

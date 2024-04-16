@@ -1,3 +1,5 @@
+//! Account system.
+
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -53,6 +55,7 @@ pub enum Permission {
     ///
     /// - [`Self::ViewSimpleAccount`]
     ViewFullAccount,
+    /// Gets simple information of an account.
     ViewSimpleAccount,
 
     /// Manage notifications.
@@ -107,20 +110,30 @@ impl libaccount::Permission for Permission {
     }
 }
 
+/// A tag of an account.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(tag = "entry", content = "tag")]
 pub enum Tag {
+    /// A permission group.
     Permission(Permission),
+    /// A department.
     Department(String),
+    /// A house.
     House(House),
+    /// An academy.
     Academy(Academy),
 }
 
+/// The entry of a [`Tag`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TagEntry {
+    /// A permission group.
     Permission,
+    /// A department.
     Department,
+    /// A house.
     House,
+    /// An academy.
     Academy,
 }
 
@@ -173,6 +186,7 @@ impl libaccount::tag::UserDefinableEntry for TagEntry {
 /// Containing verify sessions.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Ext {
+    /// Verify sessions.
     verifies: HashMap<VerifyVariant, VerifyCx>,
 }
 
@@ -187,6 +201,7 @@ pub struct Ext {
 /// Currently, the only verify session is reset password.
 #[derive(Debug)]
 pub struct Account {
+    /// The inner account.
     inner: libaccount::Account<Tag, Ext>,
 }
 
@@ -338,6 +353,7 @@ impl DerefMut for Account {
 /// An unverified account.
 #[derive(Debug)]
 pub struct Unverified {
+    /// The inner unverified account.
     inner: libaccount::Unverified<VerifyCx>,
 }
 

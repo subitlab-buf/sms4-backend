@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use axum::Router;
 use dmds::{world, IoHandle, World};
@@ -16,7 +16,7 @@ macro_rules! ipc {
 #[tokio::main]
 async fn main() {
     let config: Config = {
-        const CFG_PATH: &'static str = "config.json";
+        const CFG_PATH: &str = "config.json";
         let mut config_file = std::fs::File::open(CFG_PATH).expect("failed to open config file");
         serde_json::from_reader(&mut config_file).expect("failed to parse config file")
     };
@@ -51,7 +51,7 @@ async fn main() {
 
     macro_rules! daemon {
         ($($i:ident => $s:expr),*$(,)?) => {
-            $(tokio::spawn(dmds_tokio_fs::daemon(state.worlds.$i.clone(), Duration::from_secs($s)));)*
+            $(tokio::spawn(dmds_tokio_fs::daemon(state.worlds.$i.clone(), std::time::Duration::from_secs($s)));)*
         };
     }
 

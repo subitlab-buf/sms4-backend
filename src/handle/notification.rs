@@ -265,7 +265,7 @@ pub async fn bulk_get_info<Io: IoHandle>(
         .tags()
         .contains_permission(&Tag::Permission(Permission::ManageNotifications));
 
-    let Some(first) = notifications.get(0).copied() else {
+    let Some(first) = notifications.first().copied() else {
         return Ok(Json(HashMap::new()));
     };
     let mut select = worlds

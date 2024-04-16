@@ -1,3 +1,5 @@
+//! Posting system.
+
 use std::{
     hash::{Hash, Hasher},
     ops::RangeInclusive,
@@ -21,8 +23,10 @@ use crate::{Error, Id};
 /// ```
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Post {
+    /// Unique id of this post.
     #[serde(skip)]
     id: u64,
+    /// Post title.
     title: String,
     /// On-screen time range.
     time: RangeInclusive<Date>,
@@ -37,9 +41,11 @@ pub struct Post {
     /// Whether this post should be played as
     /// a full sequence.
     grouped: bool,
+    /// Priority of this post.
     priority: Priority,
 }
 
+/// Validates the time range of a post.
 pub fn validate_time(time: &RangeInclusive<Date>) -> Result<(), Error> {
     let dur = Duration::days(
         u32::try_from(
@@ -60,8 +66,10 @@ pub fn validate_time(time: &RangeInclusive<Date>) -> Result<(), Error> {
 }
 
 impl Post {
+    /// Maximum duration of a post.
     pub const MAX_DUR: Duration = Duration::WEEK;
 
+    /// Creates a new post.
     pub fn new(
         title: String,
         notes: String,
@@ -143,6 +151,7 @@ impl Post {
             .operator)
     }
 
+    /// Priority of this post.
     #[inline]
     pub fn priority(&self) -> Priority {
         self.priority
@@ -168,16 +177,19 @@ impl Post {
         &self.resources
     }
 
+    /// Sets the resources used by this post.
     #[inline]
     pub fn set_resources(&mut self, resources: Box<[Id]>) {
         self.resources = resources
     }
 
+    /// Whether this post is grouped.
     #[inline]
     pub fn is_grouped(&self) -> bool {
         self.grouped
     }
 
+    /// Sets whether this post is grouped.
     #[inline]
     pub fn set_is_grouped(&mut self, grouped: bool) {
         self.grouped = grouped
@@ -224,9 +236,12 @@ impl dmds::Data for Post {
 /// State of a [`Post`].
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct State {
+    /// Status of this state.
     status: Status,
+    /// Time of this state.
     #[serde(with = "time::serde::timestamp")]
     time: OffsetDateTime,
+    /// Creator of this state.
     operator: u64,
 
     /// Description of this state.
@@ -234,6 +249,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates a new state.
     #[inline]
     pub fn new(status: Status, account: u64, message: String) -> Self {
         Self {
@@ -288,8 +304,11 @@ pub enum Priority {
     /// in play time.
     Block = 255_u8,
 
+    /// High priority.
     High = 3,
+    /// Normal priority.
     #[default]
     Normal = 2,
+    /// Low priority.
     Low = 1,
 }

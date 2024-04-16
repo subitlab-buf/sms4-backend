@@ -25,7 +25,7 @@ macro_rules! gd {
 #[macro_export]
 macro_rules! va {
         ($a:expr, $s:expr => $($p:ident),*$(,)?) => {{
-            let lazy = gd!($s, $a.account).ok_or(crate::Error::PermissionDenied)?;
+            let lazy = gd!($s, $a.account).ok_or($crate::Error::PermissionDenied)?;
             let a = lazy.get().await?;
             if a.is_token_valid(&$a.token) {
                 let _tags = a.tags();
