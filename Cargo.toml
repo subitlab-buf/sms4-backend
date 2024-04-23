@@ -9,8 +9,8 @@ edition = "2021"
 axum = "0.7"
 axum-macros = "0.4"
 libaccount = { version = "0.1", git = "https://github.com/subitlab-buf/libaccount.git" }
-dmds = "0.2"
-dmds-tokio-fs = "0.2"
+dmds = "0.4"
+dmds-tokio-fs = "0.3"
 tokio = { version = "1.35", features = [
   "rt",
   "macros",
@@ -39,7 +39,6 @@ thiserror = "1.0"
 rand = "0.8"
 siphasher = "1.0"
 highway = "1.1"
-async-trait = "0.1"
 http-body-util = "0.1"
 
 [dev-dependencies]

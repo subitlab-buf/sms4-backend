@@ -171,22 +171,34 @@ impl Auth {
     }
 }
 
-#[async_trait::async_trait]
 impl<Io: IoHandle> axum::extract::FromRequestParts<Global<Io>> for Auth {
     type Rejection = Error;
 
-    async fn from_request_parts(
-        parts: &mut axum::http::request::Parts,
-        _state: &Global<Io>,
-    ) -> Result<Self, Self::Rejection> {
-        let raw = parts.headers.remove(Self::KEY).ok_or(Error::NotLoggedIn)?;
-        let (account, token) = raw
-            .to_str()?
-            .split_once(':')
-            .ok_or(Error::InvalidAuthHeader)?;
-        Ok(Self {
-            account: account.parse().map_err(|_| Error::InvalidAuthHeader)?,
-            token: token.to_owned(),
+    fn from_request_parts<'life0, 'life1, 'async_trait>(
+        parts: &'life0 mut axum::http::request::Parts,
+        _state: &'life1 Global<Io>,
+    ) -> core::pin::Pin<
+        Box<
+            dyn core::future::Future<Output = Result<Self, Self::Rejection>>
+                + core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async {
+            let raw = parts.headers.remove(Self::KEY).ok_or(Error::NotLoggedIn)?;
+            let (account, token) = raw
+                .to_str()?
+                .split_once(':')
+                .ok_or(Error::InvalidAuthHeader)?;
+            Ok(Self {
+                account: account.parse().map_err(|_| Error::InvalidAuthHeader)?,
+                token: token.to_owned(),
+            })
         })
     }
 }
